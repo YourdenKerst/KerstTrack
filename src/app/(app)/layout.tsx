@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <UserProvider userId={user.id}>
       <SupplementReminders />
-      <div className="mx-auto min-h-screen w-full max-w-md pb-24">{children}</div>
+      <div className="mx-auto min-h-screen w-full max-w-md pb-24 pt-[env(safe-area-inset-top)]">{children}</div>
       <BottomNav />
     </UserProvider>
   );

@@ -41,10 +41,16 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
           inputStream: {
             type: "LiveStream",
             target,
-            constraints: { facingMode: "environment" },
+            constraints: {
+              facingMode: "environment",
+              width: { min: 640, ideal: 1920 },
+              height: { min: 480, ideal: 1080 },
+            },
           },
-          locator: { patchSize: "medium", halfSample: true },
-          decoder: { readers: ["ean_reader", "upc_reader"] },
+          // "large" patchSize + halfSample uit: nauwkeuriger op een dichtbij gehouden
+          // telefooncamera, ten koste van wat CPU — de scansessie is kort genoeg dat dat niet opvalt.
+          locator: { patchSize: "large", halfSample: false },
+          decoder: { readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader"] },
           locate: true,
         },
         (err: unknown) => {
