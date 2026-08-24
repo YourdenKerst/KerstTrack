@@ -41,7 +41,7 @@ export function FavoritesList({ userId, dateISO }: { userId: string; dateISO: st
               type="button"
               onClick={() => deleteItem.mutate(item.id)}
               aria-label={`Verwijder favoriet ${item.name}`}
-              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger"
+              className="shrink-0 rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger active:bg-surface-muted active:text-danger"
             >
               <X size={14} />
             </button>

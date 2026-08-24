@@ -26,7 +26,7 @@ export function WaterLogList({ userId, dateISO }: { userId: string; dateISO: str
               type="button"
               onClick={() => deleteLog.mutate({ id: log.id, logDate: log.log_date })}
               aria-label="Verwijder waterlog"
-              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger"
+              className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger active:bg-surface-muted active:text-danger"
             >
               <Trash2 size={14} />
             </button>

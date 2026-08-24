@@ -148,12 +148,12 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
           {linkedLabel && ` · +${supplement.linked_nutrient_amount ?? 0}${nutrientUnit(supplement.linked_nutrient_key)} ${linkedLabel}`}
         </p>
       </div>
-      <div className="flex shrink-0 gap-1">
+      <div className="flex shrink-0 gap-2">
         <button
           type="button"
           onClick={() => setEditing(true)}
           aria-label={`Bewerk ${supplement.name}`}
-          className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+          className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground active:bg-surface-muted active:text-foreground"
         >
           <Pencil size={14} />
         </button>
@@ -161,7 +161,7 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
           type="button"
           onClick={() => deactivate.mutate(supplement.id)}
           aria-label={`Verwijder ${supplement.name}`}
-          className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger"
+          className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger active:bg-surface-muted active:text-danger"
         >
           <Trash2 size={14} />
         </button>
@@ -224,7 +224,7 @@ export function SupplementManager({ userId }: { userId: string }) {
                   <button
                     type="button"
                     onClick={() => update.mutate({ id: s.id, is_active: true })}
-                    className="flex items-center gap-1 text-xs font-medium text-primary"
+                    className="flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-medium text-primary active:bg-surface-muted"
                   >
                     <RotateCcw size={12} /> Herstellen
                   </button>
@@ -235,7 +235,7 @@ export function SupplementManager({ userId }: { userId: string }) {
                         hardDelete.mutate(s.id);
                       }
                     }}
-                    className="flex items-center gap-1 text-xs font-medium text-danger"
+                    className="flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-medium text-danger active:bg-surface-muted"
                   >
                     <Trash2 size={12} /> Verwijderen
                   </button>

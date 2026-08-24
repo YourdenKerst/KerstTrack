@@ -26,7 +26,7 @@ export function DaySwitcher({
         type="button"
         onClick={() => onChange(addDaysISO(selectedDate, -1))}
         aria-label="Vorige dag"
-        className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground"
+        className="rounded-full p-3 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground active:bg-surface-muted active:text-foreground"
       >
         <ChevronLeft size={18} />
       </button>
@@ -36,7 +36,7 @@ export function DaySwitcher({
         onClick={() => onChange(addDaysISO(selectedDate, 1))}
         disabled={selectedDate >= maxDate}
         aria-label="Volgende dag"
-        className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground disabled:opacity-30"
+        className="rounded-full p-3 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground active:bg-surface-muted active:text-foreground disabled:opacity-30"
       >
         <ChevronRight size={18} />
       </button>

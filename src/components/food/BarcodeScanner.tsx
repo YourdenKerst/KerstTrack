@@ -79,7 +79,7 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
           type="button"
           onClick={onClose}
           aria-label="Sluiten"
-          className="rounded-full bg-white/10 p-2 text-white"
+          className="rounded-full bg-white/10 p-3 text-white active:bg-white/20"
         >
           <X size={20} />
         </button>

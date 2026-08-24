@@ -36,7 +36,7 @@ export function TodayFoodList({ userId, dateISO }: { userId: string; dateISO: st
               type="button"
               onClick={() => deleteLog.mutate({ id: log.id, log_date: log.log_date })}
               aria-label={`Verwijder ${log.name}`}
-              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger"
+              className="shrink-0 rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger active:bg-surface-muted active:text-danger"
             >
               <Trash2 size={14} />
             </button>

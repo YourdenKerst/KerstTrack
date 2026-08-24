@@ -17,18 +17,22 @@ export function Toggle({ checked, onChange, disabled, ...rest }: ToggleProps) {
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={clsx(
-        "relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors duration-200 disabled:opacity-50",
-        checked ? "bg-primary" : "bg-surface-muted",
-      )}
+      className="inline-flex shrink-0 items-center justify-center p-2.5 disabled:opacity-50"
       {...rest}
     >
       <span
         className={clsx(
-          "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200",
-          checked ? "translate-x-6" : "translate-x-1",
+          "relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200",
+          checked ? "bg-primary" : "bg-surface-muted",
         )}
-      />
+      >
+        <span
+          className={clsx(
+            "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200",
+            checked ? "translate-x-6" : "translate-x-1",
+          )}
+        />
+      </span>
     </button>
   );
 }
