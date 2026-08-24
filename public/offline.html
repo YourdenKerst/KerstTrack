@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Geen verbinding — Tracker</title>
+    <style>
+      :root {
+        --background: #f7f7f5;
+        --foreground: #1c1917;
+        --surface: #ffffff;
+        --muted: #78716c;
+        --primary: #0d9488;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #100f0d;
+          --foreground: #f5f4f1;
+          --surface: #1c1a17;
+          --muted: #a8a29e;
+          --primary: #14b8a6;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-align: center;
+      }
+      .card {
+        max-width: 320px;
+      }
+      .icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 16px;
+      }
+      h1 {
+        font-size: 1.125rem;
+        margin: 0 0 8px;
+      }
+      p {
+        font-size: 0.9rem;
+        color: var(--muted);
+        margin: 0 0 20px;
+        line-height: 1.5;
+      }
+      button {
+        border: none;
+        border-radius: 12px;
+        background: var(--primary);
+        color: #ffffff;
+        font-size: 0.9rem;
+        font-weight: 600;
+        padding: 12px 20px;
+        cursor: pointer;
+      }
+      button:active {
+        opacity: 0.85;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon">
+        <svg width="28" height="28" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M156 268 L228 340 L360 184"
+            stroke="#ffffff"
+            stroke-width="48"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
+      <h1>Geen internetverbinding</h1>
+      <p>Deze pagina is niet beschikbaar zonder verbinding. Je logs staan veilig in Supabase — zodra je weer online bent, werkt alles gewoon door.</p>
+      <button onclick="location.reload()">Probeer opnieuw</button>
+    </div>
+  </body>
+</html>

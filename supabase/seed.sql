@@ -1,0 +1,19 @@
+-- Normaal gesproken is dit bestand NIET nodig: de trigger "on_auth_user_created"
+-- in schema.sql zet je profiel en startdoelen al automatisch klaar zodra je
+-- het ene account aanmaakt in Supabase Studio. Supplementen worden bewust
+-- niet voorgevuld — die stel je zelf samen via Instellingen in de app.
+--
+-- Gebruik dit script alleen als fallback, bijvoorbeeld om je startdoelen
+-- terug te zetten na wat rondklooien. Vervang <YOUR_USER_ID> door je eigen
+-- user-id (Supabase Studio > Authentication > klik op je gebruiker > "User
+-- UID"), en verwijder de comment-tekens.
+
+-- insert into public.daily_targets (user_id, calories_kcal, protein_g, carbs_g, fat_g, fiber_g, water_ml)
+-- values ('<YOUR_USER_ID>', 2100, 165, 235, 70, 35, 3000)
+-- on conflict (user_id) do update set
+--   calories_kcal = excluded.calories_kcal,
+--   protein_g = excluded.protein_g,
+--   carbs_g = excluded.carbs_g,
+--   fat_g = excluded.fat_g,
+--   fiber_g = excluded.fiber_g,
+--   water_ml = excluded.water_ml;
