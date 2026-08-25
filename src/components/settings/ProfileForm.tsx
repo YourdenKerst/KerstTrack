@@ -2,10 +2,10 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button, FieldError, Input, Label, Select } from "@/components/ui";
-import { ACTIVITY_LEVELS } from "@/lib/calculations/recommendedTargets";
+import { ACTIVITY_LEVELS, GOAL_PLANS, type GoalPlan } from "@/lib/calculations/recommendedTargets";
 import { useProfile, useUpdateProfile } from "@/lib/queries/profiles";
 
 const schema = z.object({
@@ -15,7 +15,8 @@ const schema = z.object({
   sex: z.enum(["male", "female"]).nullable(),
   birth_date: z.string().nullable(),
   activity_level: z.string().nullable(),
-  goal: z.string().nullable(),
+  goal: z.enum(["afvallen", "onderhoud", "spieropbouw"]).nullable(),
+  goal_pace_kg_per_week: z.number().nullable(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -29,8 +30,14 @@ export function ProfileForm({ userId }: { userId: string }) {
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
+
+  const selectedGoal = useWatch({ control, name: "goal" });
+  const pace = useWatch({ control, name: "goal_pace_kg_per_week" });
+  const goalPlan = GOAL_PLANS.find((g) => g.key === selectedGoal);
 
   useEffect(() => {
     if (profile) {
@@ -41,10 +48,18 @@ export function ProfileForm({ userId }: { userId: string }) {
         sex: profile.sex,
         birth_date: profile.birth_date,
         activity_level: profile.activity_level,
-        goal: profile.goal,
+        goal: (profile.goal as GoalPlan | null) ?? null,
+        goal_pace_kg_per_week: profile.goal_pace_kg_per_week,
       });
     }
   }, [profile, reset]);
+
+  function handleGoalChange(value: string) {
+    const nextGoal = (value || null) as GoalPlan | null;
+    setValue("goal", nextGoal, { shouldDirty: true });
+    const nextPlan = GOAL_PLANS.find((g) => g.key === nextGoal);
+    setValue("goal_pace_kg_per_week", nextPlan?.paceRange?.default ?? null, { shouldDirty: true });
+  }
 
   async function onSubmit(values: FormValues) {
     await update.mutateAsync(values);
@@ -112,9 +127,42 @@ export function ProfileForm({ userId }: { userId: string }) {
       </div>
 
       <div>
-        <Label htmlFor="goal">Doel (vrije tekst)</Label>
-        <Input id="goal" placeholder="bijv. afvallen" {...register("goal", { setValueAs: setValueAsNullableText })} />
+        <Label htmlFor="goal">Doel</Label>
+        <Select id="goal" value={selectedGoal ?? ""} onChange={(e) => handleGoalChange(e.target.value)}>
+          <option value="">Niet ingevuld</option>
+          {GOAL_PLANS.map((plan) => (
+            <option key={plan.key} value={plan.key}>
+              {plan.label}
+            </option>
+          ))}
+        </Select>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Bepaalt de formule waarmee je dagdoelen worden berekend (zie Dagdoelen hieronder).
+        </p>
       </div>
+
+      {goalPlan?.paceRange && (
+        <div>
+          <Label htmlFor="goal_pace_kg_per_week">
+            Tempo: {(pace ?? goalPlan.paceRange.default).toFixed(2)} kg per week{" "}
+            {goalPlan.direction < 0 ? "verliezen" : "erbij"}
+          </Label>
+          <input
+            id="goal_pace_kg_per_week"
+            type="range"
+            min={goalPlan.paceRange.min}
+            max={goalPlan.paceRange.max}
+            step={goalPlan.paceRange.step}
+            value={pace ?? goalPlan.paceRange.default}
+            onChange={(e) => setValue("goal_pace_kg_per_week", Number(e.target.value), { shouldDirty: true })}
+            className="w-full accent-primary"
+          />
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>Rustig ({goalPlan.paceRange.min} kg/week)</span>
+            <span>Snel ({goalPlan.paceRange.max} kg/week)</span>
+          </div>
+        </div>
+      )}
 
       <Button type="submit" disabled={isSubmitting || !isDirty} fullWidth>
         {isSubmitting ? "Opslaan…" : "Opslaan"}

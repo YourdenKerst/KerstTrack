@@ -12,19 +12,32 @@ export const ACTIVITY_LEVELS: { key: ActivityLevel; label: string; multiplier: n
   { key: "very_active", label: "Zeer actief (zwaar fysiek werk + sport)", multiplier: 1.9 },
 ];
 
-export const GOAL_PLANS: {
+export interface PaceRange {
+  min: number;
+  max: number;
+  default: number;
+  step: number;
+}
+
+export interface GoalPlanDef {
   key: GoalPlan;
   label: string;
-  /** kcal t.o.v. TDEE (onderhoud) */
-  calorieAdjustment: number;
+  /** -1 = afbouwen (deficit), 0 = onderhoud, 1 = opbouwen (surplus). */
+  direction: -1 | 0 | 1;
+  /** kg/week, alleen relevant als direction !== 0 — bepaalt hoe snel je je doel bereikt. */
+  paceRange: PaceRange | null;
   proteinPerKg: number;
   fatPct: number;
-}[] = [
-  // -600 kcal komt overeen met het in de app zelf genoemde verwachte verlies van 0,5-0,7 kg/week.
-  { key: "afvallen", label: "Afvallen", calorieAdjustment: -600, proteinPerKg: 2.0, fatPct: 0.25 },
-  { key: "onderhoud", label: "Onderhoud", calorieAdjustment: 0, proteinPerKg: 1.6, fatPct: 0.3 },
-  { key: "spieropbouw", label: "Spieropbouw", calorieAdjustment: 300, proteinPerKg: 2.0, fatPct: 0.25 },
+}
+
+export const GOAL_PLANS: GoalPlanDef[] = [
+  { key: "afvallen", label: "Afvallen", direction: -1, paceRange: { min: 0.25, max: 1, default: 0.5, step: 0.05 }, proteinPerKg: 2.0, fatPct: 0.25 },
+  { key: "onderhoud", label: "Onderhoud", direction: 0, paceRange: null, proteinPerKg: 1.6, fatPct: 0.3 },
+  { key: "spieropbouw", label: "Spieropbouw", direction: 1, paceRange: { min: 0.1, max: 0.4, default: 0.25, step: 0.05 }, proteinPerKg: 2.0, fatPct: 0.25 },
 ];
+
+/** Vuistregel: 1 kg lichaamsvet komt ongeveer overeen met 7700 kcal. */
+const KCAL_PER_KG_BODYWEIGHT = 7700;
 
 /** Algemene richtwaarden per geslacht — zie constants.ts voor de bron/toelichting. */
 const MICRONUTRIENT_RDA: Record<Sex, MicronutrientTargetFields> = {
@@ -71,6 +84,8 @@ export interface RecommendedTargetsInput {
   sex: Sex;
   activityLevel: ActivityLevel;
   goal: GoalPlan;
+  /** kg/week — hoe snel je het doel wilt bereiken. Genegeerd bij "onderhoud". */
+  paceKgPerWeek?: number;
 }
 
 export interface RecommendedTargets extends MicronutrientTargetFields {
@@ -88,10 +103,12 @@ const WATER_ML_PER_KG = 33;
 export function calculateRecommendedTargets(input: RecommendedTargetsInput): RecommendedTargets {
   const activity = ACTIVITY_LEVELS.find((a) => a.key === input.activityLevel) ?? ACTIVITY_LEVELS[1];
   const goal = GOAL_PLANS.find((g) => g.key === input.goal) ?? GOAL_PLANS[1];
+  const pace = goal.paceRange ? input.paceKgPerWeek ?? goal.paceRange.default : 0;
+  const calorieAdjustment = Math.round((goal.direction * pace * KCAL_PER_KG_BODYWEIGHT) / 7);
 
   const bmr = calculateBmr(input.weightKg, input.heightCm, input.age, input.sex);
   const tdee = bmr * activity.multiplier;
-  const calories = Math.round(tdee + goal.calorieAdjustment);
+  const calories = Math.round(tdee + calorieAdjustment);
 
   const protein = Math.round(goal.proteinPerKg * input.weightKg);
   const fatCalories = calories * goal.fatPct;

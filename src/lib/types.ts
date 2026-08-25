@@ -50,6 +50,7 @@ export type Database = {
           birth_date: string | null;
           activity_level: string | null;
           goal: string | null;
+          goal_pace_kg_per_week: number | null;
           updated_at: string;
         };
         Insert: {
@@ -61,6 +62,7 @@ export type Database = {
           birth_date?: string | null;
           activity_level?: string | null;
           goal?: string | null;
+          goal_pace_kg_per_week?: number | null;
           updated_at?: string;
         };
         Update: {
@@ -72,6 +74,7 @@ export type Database = {
           birth_date?: string | null;
           activity_level?: string | null;
           goal?: string | null;
+          goal_pace_kg_per_week?: number | null;
           updated_at?: string;
         };
         Relationships: [];

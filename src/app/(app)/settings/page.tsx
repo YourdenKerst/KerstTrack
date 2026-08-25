@@ -4,6 +4,7 @@ import { ChevronRight, LogOut, Pill } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CameraPermissionCard } from "@/components/settings/CameraPermissionCard";
 import { ProfileForm } from "@/components/settings/ProfileForm";
 import { ReminderSettingsCard } from "@/components/settings/ReminderSettingsCard";
 import { TargetsForm } from "@/components/settings/TargetsForm";
@@ -47,6 +48,8 @@ export default function SettingsPage() {
       </Card>
 
       <ReminderSettingsCard />
+
+      <CameraPermissionCard />
 
       <Card className="p-0">
         <Link href="/supplements" className="flex items-center justify-between gap-2 p-4">

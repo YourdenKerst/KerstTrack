@@ -15,7 +15,8 @@ create table if not exists public.profiles (
   sex text check (sex in ('male', 'female')),
   birth_date date,
   activity_level text,
-  goal text,
+  goal text check (goal in ('afvallen', 'onderhoud', 'spieropbouw')),
+  goal_pace_kg_per_week numeric(4,2),
   updated_at timestamptz not null default now()
 );
 
@@ -252,7 +253,7 @@ security definer set search_path = public
 as $$
 begin
   insert into public.profiles (id, weight_kg, height_cm, sex, activity_level, goal)
-  values (new.id, 101.5, 186, 'male', 'licht_actief', 'afvallen');
+  values (new.id, 101.5, 186, 'male', 'light', 'afvallen');
 
   insert into public.daily_targets (user_id, calories_kcal, protein_g, carbs_g, fat_g, fiber_g, water_ml)
   values (new.id, 2100, 165, 235, 70, 35, 3000);
@@ -340,3 +341,23 @@ begin
   end if;
 end $$;
 alter table public.supplements add column if not exists linked_nutrient_amount numeric(7,2);
+
+-- =========================================================
+-- Migratie: doel als vaste keuze (i.p.v. vrije tekst) + tempo-slider, en een
+-- databugfix — activity_level werd bij het aanmaken van je account gezet op
+-- 'licht_actief' terwijl de app zelf de Engelse sleutel 'light' verwacht,
+-- waardoor het activiteitsniveau in Instellingen leeg leek te staan.
+-- =========================================================
+update public.profiles set activity_level = 'light' where activity_level = 'licht_actief';
+
+alter table public.profiles add column if not exists goal_pace_kg_per_week numeric(4,2);
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_goal_check'
+  ) then
+    alter table public.profiles add constraint profiles_goal_check check (
+      goal in ('afvallen', 'onderhoud', 'spieropbouw')
+    );
+  end if;
+end $$;

@@ -1,10 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Button, FieldError, Input, Label, Select } from "@/components/ui";
+import { Button, FieldError, Input, Label } from "@/components/ui";
 import {
   calculateAge,
   calculateRecommendedTargets,
@@ -45,7 +45,6 @@ export function TargetsForm({ userId }: { userId: string }) {
   const { data: targets } = useDailyTargets(userId);
   const { data: profile } = useProfile(userId);
   const update = useUpdateDailyTargets(userId);
-  const [goal, setGoal] = useState<GoalPlan>("afvallen");
   const {
     register,
     handleSubmit,
@@ -78,10 +77,12 @@ export function TargetsForm({ userId }: { userId: string }) {
     }
   }, [targets, reset]);
 
-  const missingProfileFields = !profile?.weight_kg || !profile?.height_cm || !profile?.sex || !profile?.birth_date;
+  const missingProfileFields =
+    !profile?.weight_kg || !profile?.height_cm || !profile?.sex || !profile?.birth_date || !profile?.goal;
+  const goalPlan = GOAL_PLANS.find((g) => g.key === profile?.goal);
 
   function handleCalculate() {
-    if (!profile?.weight_kg || !profile?.height_cm || !profile?.sex || !profile?.birth_date) return;
+    if (!profile?.weight_kg || !profile?.height_cm || !profile?.sex || !profile?.birth_date || !profile?.goal) return;
 
     const recommended = calculateRecommendedTargets({
       weightKg: profile.weight_kg,
@@ -89,7 +90,8 @@ export function TargetsForm({ userId }: { userId: string }) {
       age: calculateAge(profile.birth_date, todayISO()),
       sex: profile.sex,
       activityLevel: (profile.activity_level as ActivityLevel) ?? "light",
-      goal,
+      goal: profile.goal as GoalPlan,
+      paceKgPerWeek: profile.goal_pace_kg_per_week ?? undefined,
     });
 
     reset({ ...recommended, alcohol_extra_water_ml: getValues("alcohol_extra_water_ml") ?? 500 });
@@ -108,25 +110,25 @@ export function TargetsForm({ userId }: { userId: string }) {
         <p className="mb-2 text-sm font-medium text-foreground">Aanbevolen doel</p>
         {missingProfileFields ? (
           <p className="text-xs text-muted-foreground">
-            Vul hierboven eerst gewicht, lengte, geslacht en geboortedatum in om je doelen automatisch te laten
-            berekenen (Mifflin-St Jeor).
+            Vul bij Profiel eerst gewicht, lengte, geslacht, geboortedatum en doel in om je doelen automatisch te
+            laten berekenen (Mifflin-St Jeor).
           </p>
         ) : (
-          <div className="flex gap-2">
-            <Select value={goal} onChange={(e) => setGoal(e.target.value as GoalPlan)} className="flex-1">
-              {GOAL_PLANS.map((plan) => (
-                <option key={plan.key} value={plan.key}>
-                  {plan.label}
-                </option>
-              ))}
-            </Select>
+          <div className="flex items-center gap-2">
+            <p className="flex-1 text-xs text-muted-foreground">
+              Doel: <span className="font-medium text-foreground">{goalPlan?.label}</span>
+              {profile?.goal_pace_kg_per_week != null && goalPlan?.paceRange
+                ? ` · ${profile.goal_pace_kg_per_week.toFixed(2)} kg/week`
+                : ""}
+            </p>
             <Button type="button" variant="secondary" onClick={handleCalculate}>
               Bereken en vul in
             </Button>
           </div>
         )}
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Vult alle velden hieronder in — controleer en pas aan waar nodig, en klik daarna op Opslaan.
+          Vult alle velden hieronder in — controleer en pas aan waar nodig, en klik daarna op Opslaan. Doel en
+          tempo pas je aan bij Profiel.
         </p>
       </div>
 

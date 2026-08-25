@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { Flashlight, FlashlightOff, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { QuaggaJSResultObject } from "@ericblade/quagga2";
 
@@ -12,6 +12,8 @@ interface BarcodeScannerProps {
 export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   useEffect(() => {
     const target = viewportRef.current;
@@ -45,7 +47,10 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
               facingMode: "environment",
               width: { min: 640, ideal: 1920 },
               height: { min: 480, ideal: 1080 },
-            },
+              // Best-effort — genegeerd op browsers/toestellen die dit niet ondersteunen
+              // (o.a. Safari), maar helpt op focus-op-afstand-camera's bij dichtbij scannen.
+              advanced: [{ focusMode: "continuous" }],
+            } as unknown as MediaTrackConstraints,
           },
           // "large" patchSize + halfSample uit: nauwkeuriger op een dichtbij gehouden
           // telefooncamera, ten koste van wat CPU — de scansessie is kort genoeg dat dat niet opvalt.
@@ -60,6 +65,14 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
             return;
           }
           Quagga.start();
+
+          try {
+            const capabilities = quagga.CameraAccess.getActiveTrack()?.getCapabilities?.();
+            // "torch" staat niet in de standaard MediaTrackCapabilities-types.
+            setTorchSupported(Boolean((capabilities as { torch?: boolean } | undefined)?.torch));
+          } catch {
+            setTorchSupported(false);
+          }
         },
       );
 
@@ -77,18 +90,45 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
     };
   }, [onDetected]);
 
+  async function toggleTorch() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- zie boot() hierboven
+    const Quagga = (await import("@ericblade/quagga2")).default as any;
+    try {
+      if (torchOn) {
+        await Quagga.CameraAccess.disableTorch();
+      } else {
+        await Quagga.CameraAccess.enableTorch();
+      }
+      setTorchOn((on) => !on);
+    } catch {
+      // Best-effort — niet elk toestel/browser ondersteunt dit daadwerkelijk ondanks de capability-flag.
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black">
       <div className="flex items-center justify-between p-4 pt-[env(safe-area-inset-top)]">
         <span className="text-sm font-medium text-white">Scan een streepjescode</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Sluiten"
-          className="rounded-full bg-white/10 p-3 text-white active:bg-white/20"
-        >
-          <X size={20} />
-        </button>
+        <div className="flex items-center gap-2">
+          {torchSupported && (
+            <button
+              type="button"
+              onClick={toggleTorch}
+              aria-label={torchOn ? "Zet lampje uit" : "Zet lampje aan"}
+              className="rounded-full bg-white/10 p-3 text-white active:bg-white/20"
+            >
+              {torchOn ? <FlashlightOff size={20} /> : <Flashlight size={20} />}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Sluiten"
+            className="rounded-full bg-white/10 p-3 text-white active:bg-white/20"
+          >
+            <X size={20} />
+          </button>
+        </div>
       </div>
 
       <div className="relative flex-1 overflow-hidden">
@@ -102,7 +142,10 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
       {error ? (
         <p className="p-4 text-center text-sm text-white">{error}</p>
       ) : (
-        <p className="p-4 text-center text-xs text-white/70">Richt de camera op de streepjescode van het product.</p>
+        <p className="p-4 text-center text-xs text-white/70">
+          Houd de streepjescode plat en binnen het kader, ook als hij verfrommeld of schuin is — vul aan met meer
+          licht of het lampje hierboven als hij niet gevonden wordt.
+        </p>
       )}
     </div>
   );
