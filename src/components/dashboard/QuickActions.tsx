@@ -56,7 +56,7 @@ export function QuickActions({ userId, dateISO }: { userId: string; dateISO: str
       </div>
 
       <Link
-        href={dateISO === todayISO() ? "/food" : `/food?date=${dateISO}`}
+        href={dateISO === todayISO() ? "/log" : `/log?date=${dateISO}`}
         className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
       >
         <UtensilsCrossed size={18} /> Maaltijd loggen

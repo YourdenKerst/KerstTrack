@@ -4,11 +4,11 @@ Dit document legt het Postgres/Supabase-datamodel uit. De uitvoerbare DDL staat 
 
 ## Overzicht
 
-10 tabellen, allemaal met Row Level Security aan: elke rij is alleen leesbaar/schrijfbaar door de gebruiker die er `user_id` (of bij `profiles` gewoon `id`) op heeft staan, via de policy `auth.uid() = user_id`. Omdat dit een single-user app is, is dat meer een verdedigingslaag dan een noodzaak — maar het is gratis, en het betekent dat de Supabase anon-key veilig in de browser kan staan: zonder geldige sessie levert elke tabel niets op.
+12 tabellen, allemaal met Row Level Security aan: elke rij is alleen leesbaar/schrijfbaar door de gebruiker die er `user_id` (of bij `profiles` gewoon `id`) op heeft staan, via de policy `auth.uid() = user_id`. Omdat dit een single-user app is, is dat meer een verdedigingslaag dan een noodzaak — maar het is gratis, en het betekent dat de Supabase anon-key veilig in de browser kan staan: zonder geldige sessie levert elke tabel niets op.
 
 | Tabel | Waarvoor |
 |---|---|
-| `profiles` | Lengte, gewicht, activiteitsniveau, doel — 1 rij per gebruiker |
+| `profiles` | Lengte, gewicht, activiteitsniveau, doel + tempo — 1 rij per gebruiker |
 | `daily_targets` | De instelbare dagdoelen (calorieën/macro's/water) — 1 actieve rij per gebruiker |
 | `food_items` | Herbruikbare "eigen producten" / favorieten |
 | `food_logs` | Wat je daadwerkelijk per dag hebt gegeten |
@@ -18,8 +18,12 @@ Dit document legt het Postgres/Supabase-datamodel uit. De uitvoerbare DDL staat 
 | `water_logs` | Elke waterinname-toevoeging |
 | `weight_logs` | Gewicht per dag |
 | `alcohol_logs` | Welke dagen je alcohol hebt gedronken |
+| `recipes` | Zelfsamengestelde maaltijden (bv. "cake") van meerdere ingrediënten |
+| `recipe_ingredients` | De ingrediënten van een recept, per 100g gedenormaliseerd |
 
-De opdracht noemde 9 categorieën; `correction_checkoffs` is een toevoeging (zie onder).
+De opdracht noemde 9 categorieën; `correction_checkoffs`, `recipes` en `recipe_ingredients` zijn latere toevoegingen (zie onder).
+
+**Recepten rekenen per 100 gram.** Elk `recipe_ingredients`-item slaat zijn voedingswaarden per 100g op (net als Open Food Facts dat doet), plus hoeveel gram daadwerkelijk in het recept gaat. Zo kun je een ingrediënt (bv. bloem) aan meerdere recepten toevoegen met een andere hoeveelheid, en blijft opschalen naar het totale recept — of een deel daarvan — een simpele vermenigvuldiging. `food_items.reference_grams` (standaard 100) maakt het mogelijk om een bestaand, eerder handmatig ingevoerd product ook als ingrediënt te herschalen.
 
 ## Bewuste ontwerpkeuzes
 

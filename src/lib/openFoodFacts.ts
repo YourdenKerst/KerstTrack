@@ -7,6 +7,7 @@
 export interface OpenFoodFactsProduct {
   barcode: string;
   name: string | null;
+  imageUrl: string | null;
   caloriesKcal: number | null;
   proteinG: number | null;
   carbsG: number | null;
@@ -107,6 +108,7 @@ export async function lookupBarcodeProduct(barcode: string): Promise<OpenFoodFac
   return {
     barcode,
     name: product.product_name || product.product_name_nl || product.generic_name || null,
+    imageUrl: product.image_front_small_url || product.image_front_url || product.image_url || null,
     caloriesKcal: readMacro(nutriments, "energy-kcal"),
     proteinG: readMacro(nutriments, "proteins"),
     carbsG: readMacro(nutriments, "carbohydrates"),

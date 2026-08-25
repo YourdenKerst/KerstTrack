@@ -46,6 +46,7 @@ export function ScannedProductReview({
       fat_g: scaled.fatG ?? 0,
       fiber_g: scaled.fiberG ?? 0,
       saveAsFavorite: true,
+      reference_grams: grams,
       vitamin_d_mcg: scaled.vitaminDMcg,
       magnesium_mg: scaled.magnesiumMg,
       vitamin_b1_mg: scaled.vitaminB1Mg,
@@ -61,9 +62,19 @@ export function ScannedProductReview({
 
   return (
     <Card className="space-y-3">
-      <div>
-        <h2 className="text-sm font-semibold text-foreground">{product.name ?? "Gescand product"}</h2>
-        <p className="text-xs text-muted-foreground">Gevonden via Open Food Facts — pas de hoeveelheid aan.</p>
+      <div className="flex items-center gap-3">
+        {product.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- extern OFF-domein, één kleine thumbnail, geen optimalisatie nodig
+          <img
+            src={product.imageUrl}
+            alt=""
+            className="h-14 w-14 shrink-0 rounded-xl border border-border object-cover"
+          />
+        )}
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold text-foreground">{product.name ?? "Gescand product"}</h2>
+          <p className="text-xs text-muted-foreground">Gevonden via Open Food Facts — pas de hoeveelheid aan.</p>
+        </div>
       </div>
 
       <div>

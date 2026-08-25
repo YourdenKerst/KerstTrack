@@ -9,6 +9,7 @@ import { MacroRings } from "@/components/dashboard/MacroRings";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { SupplementChecklist } from "@/components/dashboard/SupplementChecklist";
 import { WeightTrendCard } from "@/components/dashboard/WeightTrendCard";
+import { TodayFoodList } from "@/components/food/TodayFoodList";
 import { sumMacros } from "@/lib/calculations/nutrition";
 import { addDaysISO, formatFullDate, MAX_FUTURE_PLANNING_DAYS, todayISO } from "@/lib/date";
 import { useEffectiveWaterTarget } from "@/lib/hooks/useEffectiveWaterTarget";
@@ -79,6 +80,8 @@ function DashboardPageContent() {
       <SupplementChecklist userId={userId} dateISO={selectedDate} />
 
       <WeightTrendCard userId={userId} />
+
+      <TodayFoodList userId={userId} dateISO={selectedDate} />
     </div>
   );
 }

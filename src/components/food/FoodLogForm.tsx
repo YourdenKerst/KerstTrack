@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button, FieldError, Input, Label } from "@/components/ui";
 import { MICRONUTRIENT_META } from "@/lib/constants";
@@ -18,6 +18,7 @@ const schema = z.object({
   fat_g: z.number({ error: "Vul een getal in" }).finite().min(0),
   fiber_g: z.number({ error: "Vul een getal in" }).finite().min(0),
   saveAsFavorite: z.boolean(),
+  reference_grams: z.number({ error: "Vul een getal in" }).positive("Moet groter dan 0 zijn"),
   vitamin_d_mcg: nullableNonNegative,
   magnesium_mg: nullableNonNegative,
   vitamin_b1_mg: nullableNonNegative,
@@ -40,6 +41,7 @@ export const EMPTY_FOOD_LOG_VALUES: FoodLogFormValues = {
   fat_g: 0,
   fiber_g: 0,
   saveAsFavorite: false,
+  reference_grams: 100,
   vitamin_d_mcg: null,
   magnesium_mg: null,
   vitamin_b1_mg: null,
@@ -74,19 +76,21 @@ export function FoodLogForm({
     register,
     handleSubmit,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FoodLogFormValues>({
     resolver: zodResolver(schema),
     defaultValues: initialValues ?? EMPTY_FOOD_LOG_VALUES,
   });
+  const saveAsFavorite = useWatch({ control, name: "saveAsFavorite" });
 
   async function onSubmit(values: FoodLogFormValues) {
-    const { saveAsFavorite, ...rest } = values;
+    const { saveAsFavorite, reference_grams, ...rest } = values;
 
     await addFoodLog.mutateAsync({ ...rest, log_date: dateISO, food_item_id: null });
 
     if (saveAsFavorite) {
-      await addFoodItem.mutateAsync({ ...rest, barcode: barcode ?? null });
+      await addFoodItem.mutateAsync({ ...rest, barcode: barcode ?? null, reference_grams });
     }
 
     reset(EMPTY_FOOD_LOG_VALUES);
@@ -196,6 +200,24 @@ export function FoodLogForm({
         />
         Bewaar als favoriet voor later
       </label>
+
+      {saveAsFavorite && (
+        <div>
+          <Label htmlFor="reference_grams">Bovenstaande waarden gelden voor hoeveel gram?</Label>
+          <Input
+            id="reference_grams"
+            type="number"
+            inputMode="decimal"
+            min={1}
+            step="any"
+            {...register("reference_grams", { valueAsNumber: true })}
+          />
+          <FieldError>{errors.reference_grams?.message}</FieldError>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Zo kan dit product later kloppend herschaald worden, bv. als ingrediënt in een maaltijd.
+          </p>
+        </div>
+      )}
 
       <Button type="submit" fullWidth disabled={isSubmitting}>
         {isSubmitting ? "Loggen…" : "Loggen"}

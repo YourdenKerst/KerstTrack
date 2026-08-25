@@ -70,6 +70,9 @@ create table if not exists public.food_items (
   potassium_mg numeric(7,1),
   calcium_mg numeric(7,1),
   iron_mg numeric(6,2),
+  -- Hoeveel gram de bovenstaande waarden vertegenwoordigen — nodig om dit item
+  -- correct te kunnen herschalen als receptingrediënt (zie recipe_ingredients).
+  reference_grams numeric(7,1) not null default 100,
   created_at timestamptz not null default now()
 );
 create index if not exists food_items_user_idx on public.food_items(user_id);
@@ -196,6 +199,48 @@ create table if not exists public.alcohol_logs (
 create index if not exists alcohol_logs_user_date_idx on public.alcohol_logs(user_id, log_date);
 
 -- =========================================================
+-- 11. recipes — eigen samengestelde maaltijden (bv. "cake") van meerdere ingrediënten
+-- =========================================================
+create table if not exists public.recipes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists recipes_user_idx on public.recipes(user_id);
+
+-- =========================================================
+-- 12. recipe_ingredients — ingrediënten van een recept, per 100g gedenormaliseerd
+-- (net als food_logs t.o.v. food_items) zodat een latere wijziging aan het
+-- oorspronkelijke item de receptgeschiedenis niet stilletjes verandert.
+-- =========================================================
+create table if not exists public.recipe_ingredients (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  recipe_id uuid not null references public.recipes(id) on delete cascade,
+  name text not null,
+  grams numeric(7,1) not null,
+  calories_kcal_per_100g numeric(7,2) not null,
+  protein_g_per_100g numeric(7,2) not null default 0,
+  carbs_g_per_100g numeric(7,2) not null default 0,
+  fat_g_per_100g numeric(7,2) not null default 0,
+  fiber_g_per_100g numeric(7,2) not null default 0,
+  vitamin_d_mcg_per_100g numeric(7,2),
+  magnesium_mg_per_100g numeric(7,2),
+  vitamin_b1_mg_per_100g numeric(7,2),
+  vitamin_b6_mg_per_100g numeric(7,2),
+  vitamin_b12_mcg_per_100g numeric(7,2),
+  omega3_mg_per_100g numeric(7,2),
+  zinc_mg_per_100g numeric(7,2),
+  potassium_mg_per_100g numeric(7,2),
+  calcium_mg_per_100g numeric(7,2),
+  iron_mg_per_100g numeric(7,2),
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists recipe_ingredients_recipe_idx on public.recipe_ingredients(recipe_id);
+
+-- =========================================================
 -- Row Level Security — elke tabel alleen leesbaar/schrijfbaar door de eigenaar
 -- =========================================================
 alter table public.profiles enable row level security;
@@ -208,6 +253,8 @@ alter table public.correction_checkoffs enable row level security;
 alter table public.water_logs enable row level security;
 alter table public.weight_logs enable row level security;
 alter table public.alcohol_logs enable row level security;
+alter table public.recipes enable row level security;
+alter table public.recipe_ingredients enable row level security;
 
 drop policy if exists "profiles_self" on public.profiles;
 create policy "profiles_self" on public.profiles for all using (auth.uid() = id) with check (auth.uid() = id);
@@ -238,6 +285,12 @@ create policy "weight_logs_self" on public.weight_logs for all using (auth.uid()
 
 drop policy if exists "alcohol_logs_self" on public.alcohol_logs;
 create policy "alcohol_logs_self" on public.alcohol_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "recipes_self" on public.recipes;
+create policy "recipes_self" on public.recipes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "recipe_ingredients_self" on public.recipe_ingredients;
+create policy "recipe_ingredients_self" on public.recipe_ingredients for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- =========================================================
 -- Auto-seed: zodra het ene account wordt aangemaakt (via Supabase Studio),
@@ -361,3 +414,53 @@ begin
     );
   end if;
 end $$;
+
+-- =========================================================
+-- Migratie: recepten (samengestelde maaltijden van meerdere ingrediënten).
+-- reference_grams op food_items zodat een bestaand item ook correct kan
+-- worden herschaald als receptingrediënt.
+-- =========================================================
+alter table public.food_items add column if not exists reference_grams numeric(7,1) not null default 100;
+
+create table if not exists public.recipes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists recipes_user_idx on public.recipes(user_id);
+
+create table if not exists public.recipe_ingredients (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  recipe_id uuid not null references public.recipes(id) on delete cascade,
+  name text not null,
+  grams numeric(7,1) not null,
+  calories_kcal_per_100g numeric(7,2) not null,
+  protein_g_per_100g numeric(7,2) not null default 0,
+  carbs_g_per_100g numeric(7,2) not null default 0,
+  fat_g_per_100g numeric(7,2) not null default 0,
+  fiber_g_per_100g numeric(7,2) not null default 0,
+  vitamin_d_mcg_per_100g numeric(7,2),
+  magnesium_mg_per_100g numeric(7,2),
+  vitamin_b1_mg_per_100g numeric(7,2),
+  vitamin_b6_mg_per_100g numeric(7,2),
+  vitamin_b12_mcg_per_100g numeric(7,2),
+  omega3_mg_per_100g numeric(7,2),
+  zinc_mg_per_100g numeric(7,2),
+  potassium_mg_per_100g numeric(7,2),
+  calcium_mg_per_100g numeric(7,2),
+  iron_mg_per_100g numeric(7,2),
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists recipe_ingredients_recipe_idx on public.recipe_ingredients(recipe_id);
+
+alter table public.recipes enable row level security;
+alter table public.recipe_ingredients enable row level security;
+
+drop policy if exists "recipes_self" on public.recipes;
+create policy "recipes_self" on public.recipes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "recipe_ingredients_self" on public.recipe_ingredients;
+create policy "recipe_ingredients_self" on public.recipe_ingredients for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

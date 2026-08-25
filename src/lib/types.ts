@@ -166,6 +166,7 @@ export type Database = {
           potassium_mg: number | null;
           calcium_mg: number | null;
           iron_mg: number | null;
+          reference_grams: number;
           created_at: string;
         };
         Insert: {
@@ -188,6 +189,7 @@ export type Database = {
           potassium_mg?: number | null;
           calcium_mg?: number | null;
           iron_mg?: number | null;
+          reference_grams?: number;
           created_at?: string;
         };
         Update: {
@@ -210,6 +212,7 @@ export type Database = {
           potassium_mg?: number | null;
           calcium_mg?: number | null;
           iron_mg?: number | null;
+          reference_grams?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -448,6 +451,102 @@ export type Database = {
         };
         Relationships: [];
       };
+      recipes: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      recipe_ingredients: {
+        Row: {
+          id: string;
+          user_id: string;
+          recipe_id: string;
+          name: string;
+          grams: number;
+          calories_kcal_per_100g: number;
+          protein_g_per_100g: number;
+          carbs_g_per_100g: number;
+          fat_g_per_100g: number;
+          fiber_g_per_100g: number;
+          vitamin_d_mcg_per_100g: number | null;
+          magnesium_mg_per_100g: number | null;
+          vitamin_b1_mg_per_100g: number | null;
+          vitamin_b6_mg_per_100g: number | null;
+          vitamin_b12_mcg_per_100g: number | null;
+          omega3_mg_per_100g: number | null;
+          zinc_mg_per_100g: number | null;
+          potassium_mg_per_100g: number | null;
+          calcium_mg_per_100g: number | null;
+          iron_mg_per_100g: number | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          recipe_id: string;
+          name: string;
+          grams: number;
+          calories_kcal_per_100g: number;
+          protein_g_per_100g?: number;
+          carbs_g_per_100g?: number;
+          fat_g_per_100g?: number;
+          fiber_g_per_100g?: number;
+          vitamin_d_mcg_per_100g?: number | null;
+          magnesium_mg_per_100g?: number | null;
+          vitamin_b1_mg_per_100g?: number | null;
+          vitamin_b6_mg_per_100g?: number | null;
+          vitamin_b12_mcg_per_100g?: number | null;
+          omega3_mg_per_100g?: number | null;
+          zinc_mg_per_100g?: number | null;
+          potassium_mg_per_100g?: number | null;
+          calcium_mg_per_100g?: number | null;
+          iron_mg_per_100g?: number | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          recipe_id?: string;
+          name?: string;
+          grams?: number;
+          calories_kcal_per_100g?: number;
+          protein_g_per_100g?: number;
+          carbs_g_per_100g?: number;
+          fat_g_per_100g?: number;
+          fiber_g_per_100g?: number;
+          vitamin_d_mcg_per_100g?: number | null;
+          magnesium_mg_per_100g?: number | null;
+          vitamin_b1_mg_per_100g?: number | null;
+          vitamin_b6_mg_per_100g?: number | null;
+          vitamin_b12_mcg_per_100g?: number | null;
+          omega3_mg_per_100g?: number | null;
+          zinc_mg_per_100g?: number | null;
+          potassium_mg_per_100g?: number | null;
+          calcium_mg_per_100g?: number | null;
+          iron_mg_per_100g?: number | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -468,3 +567,5 @@ export type CorrectionCheckoff = PublicTables["correction_checkoffs"]["Row"];
 export type WaterLog = PublicTables["water_logs"]["Row"];
 export type WeightLog = PublicTables["weight_logs"]["Row"];
 export type AlcoholLog = PublicTables["alcohol_logs"]["Row"];
+export type Recipe = PublicTables["recipes"]["Row"];
+export type RecipeIngredient = PublicTables["recipe_ingredients"]["Row"];
