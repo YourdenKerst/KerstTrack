@@ -500,3 +500,39 @@ create policy "food_images_delete" on storage.objects for delete to authenticate
 -- hieronder als favoriet aangemerkt zodat ze niet plotseling verdwijnen.
 -- =========================================================
 alter table public.food_items add column if not exists is_favorite boolean not null default true;
+
+-- =========================================================
+-- Migratie: echte Web Push-meldingen. De lokale setTimeout-planning (zie
+-- SupplementReminders.tsx) werkt alleen zolang de app open is; deze twee
+-- tabellen maken meldingen mogelijk ook als de app dicht is, via een
+-- server-route die een cron elke paar minuten aanroept (zie
+-- src/app/api/push/send-due/route.ts).
+-- =========================================================
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth_key text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions(user_id);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists "push_subscriptions_self" on public.push_subscriptions;
+create policy "push_subscriptions_self" on public.push_subscriptions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Bijhouden welke herinnering al verstuurd is (per dag) zodat een cron die
+-- elke paar minuten draait dezelfde melding niet meermaals verstuurt. Alleen
+-- de server (via de service-role key) leest/schrijft hier — geen client-
+-- policy nodig, dus RLS staat aan zonder policy (op slot dus voor iedereen
+-- behalve service-role).
+create table if not exists public.sent_reminder_notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  supplement_id uuid not null references public.supplements(id) on delete cascade,
+  slot smallint not null,
+  log_date date not null,
+  sent_at timestamptz not null default now(),
+  unique (supplement_id, slot, log_date)
+);
+alter table public.sent_reminder_notifications enable row level security;

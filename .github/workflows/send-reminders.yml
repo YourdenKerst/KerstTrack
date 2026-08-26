@@ -1,0 +1,19 @@
+name: Send due supplement reminders
+
+# Vercel Hobby staat cron niet frequenter dan 1x/dag toe, GitHub Actions wel —
+# vandaar hier i.p.v. vercel.json. Roept /api/push/send-due aan, die zelf
+# uitzoekt welke herinnering (indien enig) nu daadwerkelijk verstuurd moet
+# worden (zie die route voor de dedup-logica).
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Roep send-due aan
+        run: |
+          curl -sf -X POST https://kersttrack.vercel.app/api/push/send-due \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

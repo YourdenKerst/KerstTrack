@@ -56,3 +56,59 @@ export function getNotificationPermission(): NotificationPermissionState {
 export function getServerNotificationPermission(): NotificationPermissionState {
   return "unsupported";
 }
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+/**
+ * Meldt de browser aan voor echte Web Push (werkt ook als de app dicht is) en
+ * stuurt de inschrijving naar de server. Best-effort: geeft `false` terug als
+ * push niet ondersteund wordt of de publieke VAPID-key ontbreekt, in plaats
+ * van te gooien — de lokale herinneringen blijven dan gewoon werken.
+ */
+export async function subscribeToPush(): Promise<boolean> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) return false;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!publicKey) return false;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource,
+      });
+    }
+
+    const response = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function unsubscribeFromPush(): Promise<void> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return;
+    await fetch("/api/push/subscribe", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: subscription.endpoint }),
+    });
+    await subscription.unsubscribe();
+  } catch {
+    // Best-effort — een mislukte opruiming mag het uitzetten van de instelling niet blokkeren.
+  }
+}

@@ -441,6 +441,60 @@ export type Database = {
         };
         Relationships: [];
       };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth_key: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth_key: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          endpoint?: string;
+          p256dh?: string;
+          auth_key?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      sent_reminder_notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          supplement_id: string;
+          slot: number;
+          log_date: string;
+          sent_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          supplement_id: string;
+          slot: number;
+          log_date: string;
+          sent_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          supplement_id?: string;
+          slot?: number;
+          log_date?: string;
+          sent_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -464,3 +518,4 @@ export type WeightLog = PublicTables["weight_logs"]["Row"];
 export type AlcoholLog = PublicTables["alcohol_logs"]["Row"];
 export type Recipe = PublicTables["recipes"]["Row"];
 export type RecipeIngredient = PublicTables["recipe_ingredients"]["Row"];
+export type PushSubscriptionRow = PublicTables["push_subscriptions"]["Row"];

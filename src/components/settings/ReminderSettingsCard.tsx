@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Button, Card, Toggle } from "@/components/ui";
 import { computeTodaysReminders } from "@/lib/calculations/supplementReminders";
 import { todayISO } from "@/lib/date";
@@ -12,7 +12,9 @@ import {
   getServerReminderSettings,
   notifyReminderChange,
   setReminderSettings,
+  subscribeToPush,
   subscribeToReminderSettings,
+  unsubscribeFromPush,
 } from "@/lib/notifications";
 import { useAllSupplementReminders } from "@/lib/queries/supplementReminders";
 import { useSupplementLogsForDate } from "@/lib/queries/supplementLogs";
@@ -42,13 +44,28 @@ export function ReminderSettingsCard({ userId }: { userId: string }) {
         )
       : [];
 
+  // Vangt het geval dat "Herinneringen" al aanstond vóórdat echte push
+  // bestond — die gebruiker heeft nog geen push-inschrijving. Idempotent
+  // (subscribeToPush hergebruikt een bestaande inschrijving), dus veilig om
+  // ook bij elke volgende mount opnieuw te proberen.
+  useEffect(() => {
+    if (settings.enabled && permission === "granted") {
+      subscribeToPush();
+    }
+  }, [settings.enabled, permission]);
+
   async function handleToggle(enabled: boolean) {
-    if (enabled && typeof Notification !== "undefined" && Notification.permission === "default") {
-      const result = await Notification.requestPermission();
-      if (result !== "granted") {
-        notifyReminderChange();
-        return;
+    if (enabled) {
+      if (typeof Notification !== "undefined" && Notification.permission === "default") {
+        const result = await Notification.requestPermission();
+        if (result !== "granted") {
+          notifyReminderChange();
+          return;
+        }
       }
+      await subscribeToPush();
+    } else {
+      await unsubscribeFromPush();
     }
     setReminderSettings({ ...settings, enabled });
   }
@@ -113,9 +130,8 @@ export function ReminderSettingsCard({ userId }: { userId: string }) {
 
       <p className="mt-3 text-xs text-muted-foreground">
         De tijdstippen en herhaling stel je per supplement in bij het Supplementen-tabblad — maar alleen zolang je
-        ze nog niet hebt afgevinkt. Best-effort: werkt direct op Android/desktop zolang de app open is. Op iPhone
-        alleen als de app is toegevoegd aan het beginscherm (vanaf iOS 16.4) — en ook dan alleen zolang die niet
-        volledig is afgesloten.
+        ze nog niet hebt afgevinkt. Werkt ook als de app dicht is (een server checkt elke paar minuten of er iets
+        aan de beurt is). Op iPhone alleen als de app is toegevoegd aan het beginscherm (vanaf iOS 16.4).
       </p>
     </Card>
   );

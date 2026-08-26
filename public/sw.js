@@ -38,6 +38,38 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Echte Web Push: komt van de server binnen (zie /api/push/send-due), werkt
+// ook als de app/tab niet open is. Aanvullend op de lokale setTimeout-planning
+// in SupplementReminders.tsx (die alleen werkt zolang de app open is) — beide
+// gebruiken dezelfde `tag`, dus een dubbele melding voor hetzelfde supplement
+// vervangt elkaar in plaats van te stapelen.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = {};
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Supplement-herinnering", {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      tag: data.tag,
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clientsArr) => {
+      const existing = clientsArr.find((c) => "focus" in c);
+      if (existing) return existing.focus();
+      return self.clients.openWindow("/");
+    }),
+  );
+});
+
 /**
  * Eén fetch-poging met timeout; bij mislukking (of timeout) nog één herkansing.
  * Voorkomt dat een kortstondige netwerk-hapering meteen als "offline" wordt
