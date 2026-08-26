@@ -1,10 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Button, FieldError, Input, Label } from "@/components/ui";
+import { Button, FieldError, Input, Label, Select } from "@/components/ui";
 import {
   calculateAge,
   calculateRecommendedTargets,
@@ -12,10 +12,10 @@ import {
   type ActivityLevel,
   type GoalPlan,
 } from "@/lib/calculations/recommendedTargets";
-import { MICRONUTRIENT_META } from "@/lib/constants";
 import { todayISO } from "@/lib/date";
 import { useDailyTargets, useUpdateDailyTargets } from "@/lib/queries/dailyTargets";
-import { useProfile } from "@/lib/queries/profiles";
+import { useProfile, useUpdateProfile } from "@/lib/queries/profiles";
+import type { Profile } from "@/lib/types";
 
 const nonNegative = z.number({ error: "Vul een getal in" }).nonnegative();
 
@@ -27,24 +27,111 @@ const schema = z.object({
   fiber_g: nonNegative,
   water_ml: z.number({ error: "Vul een getal in" }).positive("Moet groter dan 0 zijn"),
   alcohol_extra_water_ml: nonNegative,
-  vitamin_d_mcg: nonNegative,
-  magnesium_mg: nonNegative,
-  vitamin_b1_mg: nonNegative,
-  vitamin_b6_mg: nonNegative,
-  vitamin_b12_mcg: nonNegative,
-  omega3_mg: nonNegative,
-  zinc_mg: nonNegative,
-  potassium_mg: nonNegative,
-  calcium_mg: nonNegative,
-  iron_mg: nonNegative,
 });
 
 type FormValues = z.infer<typeof schema>;
+
+interface CompleteProfile extends Profile {
+  weight_kg: number;
+  height_cm: number;
+  sex: NonNullable<Profile["sex"]>;
+  birth_date: string;
+}
+
+function GoalPaceEditor({
+  profile,
+  onCalculate,
+}: {
+  profile: CompleteProfile;
+  onCalculate: (goal: GoalPlan, pace: number | null) => Promise<void>;
+}) {
+  const [goal, setGoal] = useState<GoalPlan | null>((profile.goal as GoalPlan | null) ?? null);
+  const [pace, setPace] = useState<number | null>(profile.goal_pace_kg_per_week);
+  const [calculating, setCalculating] = useState(false);
+
+  const goalPlan = GOAL_PLANS.find((g) => g.key === goal);
+  const inDanger = Boolean(goalPlan?.paceRange && pace != null && pace > goalPlan.paceRange.dangerAbove);
+
+  function handleGoalChange(value: string) {
+    const nextGoal = (value || null) as GoalPlan | null;
+    setGoal(nextGoal);
+    const nextPlan = GOAL_PLANS.find((g) => g.key === nextGoal);
+    setPace(nextPlan?.paceRange?.default ?? null);
+  }
+
+  async function handleCalculate() {
+    if (!goal) return;
+    setCalculating(true);
+    try {
+      await onCalculate(goal, pace);
+    } finally {
+      setCalculating(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <Select value={goal ?? ""} onChange={(e) => handleGoalChange(e.target.value)}>
+        <option value="">Niet ingevuld</option>
+        {GOAL_PLANS.map((plan) => (
+          <option key={plan.key} value={plan.key}>
+            {plan.label}
+          </option>
+        ))}
+      </Select>
+
+      {goalPlan?.paceRange && (
+        <div>
+          <Label>
+            Tempo: {(pace ?? goalPlan.paceRange.default).toFixed(2)} kg per week{" "}
+            {goalPlan.direction < 0 ? "verliezen" : "erbij"}
+          </Label>
+          <input
+            type="range"
+            min={goalPlan.paceRange.min}
+            max={goalPlan.paceRange.max}
+            step={goalPlan.paceRange.step}
+            value={pace ?? goalPlan.paceRange.default}
+            onChange={(e) => setPace(Number(e.target.value))}
+            className="h-2 w-full appearance-none rounded-full accent-foreground"
+            style={{
+              background: `linear-gradient(to right, var(--success-cell) 0%, var(--success-cell) ${
+                ((goalPlan.paceRange.dangerAbove - goalPlan.paceRange.min) /
+                  (goalPlan.paceRange.max - goalPlan.paceRange.min)) *
+                100
+              }%, var(--danger-cell) ${
+                ((goalPlan.paceRange.dangerAbove - goalPlan.paceRange.min) /
+                  (goalPlan.paceRange.max - goalPlan.paceRange.min)) *
+                100
+              }%, var(--danger-cell) 100%)`,
+            }}
+          />
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>Rustig ({goalPlan.paceRange.min} kg/week)</span>
+            <span>Snel ({goalPlan.paceRange.max} kg/week)</span>
+          </div>
+          {inDanger && (
+            <p className="mt-2 rounded-lg bg-warning-bg px-3 py-2 text-xs text-foreground">
+              Dit tempo is agressiever dan doorgaans wordt aangeraden en kan gepaard gaan met meer spierverlies,
+              vermoeidheid of een groter risico op terugval. Overweeg een rustiger tempo, of overleg dit met een
+              arts of diëtist.
+            </p>
+          )}
+        </div>
+      )}
+
+      <Button type="button" variant="secondary" fullWidth onClick={handleCalculate} disabled={calculating || !goal}>
+        {calculating ? "Bezig…" : "Bereken en vul in"}
+      </Button>
+    </div>
+  );
+}
 
 export function TargetsForm({ userId }: { userId: string }) {
   const { data: targets } = useDailyTargets(userId);
   const { data: profile } = useProfile(userId);
   const update = useUpdateDailyTargets(userId);
+  const updateProfile = useUpdateProfile(userId);
   const {
     register,
     handleSubmit,
@@ -63,35 +150,27 @@ export function TargetsForm({ userId }: { userId: string }) {
         fiber_g: targets.fiber_g,
         water_ml: targets.water_ml,
         alcohol_extra_water_ml: targets.alcohol_extra_water_ml,
-        vitamin_d_mcg: targets.vitamin_d_mcg,
-        magnesium_mg: targets.magnesium_mg,
-        vitamin_b1_mg: targets.vitamin_b1_mg,
-        vitamin_b6_mg: targets.vitamin_b6_mg,
-        vitamin_b12_mcg: targets.vitamin_b12_mcg,
-        omega3_mg: targets.omega3_mg,
-        zinc_mg: targets.zinc_mg,
-        potassium_mg: targets.potassium_mg,
-        calcium_mg: targets.calcium_mg,
-        iron_mg: targets.iron_mg,
       });
     }
   }, [targets, reset]);
 
-  const missingProfileFields =
-    !profile?.weight_kg || !profile?.height_cm || !profile?.sex || !profile?.birth_date || !profile?.goal;
-  const goalPlan = GOAL_PLANS.find((g) => g.key === profile?.goal);
+  const completeProfile: CompleteProfile | null =
+    profile?.weight_kg && profile?.height_cm && profile?.sex && profile?.birth_date
+      ? (profile as CompleteProfile)
+      : null;
 
-  function handleCalculate() {
-    if (!profile?.weight_kg || !profile?.height_cm || !profile?.sex || !profile?.birth_date || !profile?.goal) return;
+  async function handleCalculate(goal: GoalPlan, pace: number | null) {
+    if (!completeProfile) return;
+    await updateProfile.mutateAsync({ goal, goal_pace_kg_per_week: pace });
 
     const recommended = calculateRecommendedTargets({
-      weightKg: profile.weight_kg,
-      heightCm: profile.height_cm,
-      age: calculateAge(profile.birth_date, todayISO()),
-      sex: profile.sex,
-      activityLevel: (profile.activity_level as ActivityLevel) ?? "light",
-      goal: profile.goal as GoalPlan,
-      paceKgPerWeek: profile.goal_pace_kg_per_week ?? undefined,
+      weightKg: completeProfile.weight_kg,
+      heightCm: completeProfile.height_cm,
+      age: calculateAge(completeProfile.birth_date, todayISO()),
+      sex: completeProfile.sex,
+      activityLevel: (completeProfile.activity_level as ActivityLevel) ?? "light",
+      goal,
+      paceKgPerWeek: pace ?? undefined,
     });
 
     reset({ ...recommended, alcohol_extra_water_ml: getValues("alcohol_extra_water_ml") ?? 500 });
@@ -107,28 +186,17 @@ export function TargetsForm({ userId }: { userId: string }) {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-surface-muted p-3">
-        <p className="mb-2 text-sm font-medium text-foreground">Aanbevolen doel</p>
-        {missingProfileFields ? (
+        <p className="mb-2 text-sm font-medium text-foreground">Doel &amp; tempo</p>
+        {!completeProfile ? (
           <p className="text-xs text-muted-foreground">
-            Vul bij Profiel eerst gewicht, lengte, geslacht, geboortedatum en doel in om je doelen automatisch te
+            Vul hierboven eerst gewicht, lengte, geslacht en geboortedatum in om je voedingsschema automatisch te
             laten berekenen (Mifflin-St Jeor).
           </p>
         ) : (
-          <div className="flex items-center gap-2">
-            <p className="flex-1 text-xs text-muted-foreground">
-              Doel: <span className="font-medium text-foreground">{goalPlan?.label}</span>
-              {profile?.goal_pace_kg_per_week != null && goalPlan?.paceRange
-                ? ` · ${profile.goal_pace_kg_per_week.toFixed(2)} kg/week`
-                : ""}
-            </p>
-            <Button type="button" variant="secondary" onClick={handleCalculate}>
-              Bereken en vul in
-            </Button>
-          </div>
+          <GoalPaceEditor profile={completeProfile} onCalculate={handleCalculate} />
         )}
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Vult alle velden hieronder in — controleer en pas aan waar nodig, en klik daarna op Opslaan. Doel en
-          tempo pas je aan bij Profiel.
+          Vult alle velden hieronder in — controleer en pas aan waar nodig, en klik daarna op Opslaan.
         </p>
       </div>
 
@@ -180,21 +248,6 @@ export function TargetsForm({ userId }: { userId: string }) {
           />
           <FieldError>{errors.alcohol_extra_water_ml?.message}</FieldError>
         </div>
-
-        <details className="rounded-xl border border-border px-3 py-2">
-          <summary className="cursor-pointer text-sm font-medium text-foreground">Micronutriënt-doelen</summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {MICRONUTRIENT_META.map((meta) => (
-              <div key={meta.key}>
-                <Label htmlFor={meta.key}>
-                  {meta.label} ({meta.unit})
-                </Label>
-                <Input id={meta.key} type="number" step="any" {...register(meta.key, { valueAsNumber: true })} />
-                <FieldError>{errors[meta.key]?.message}</FieldError>
-              </div>
-            ))}
-          </div>
-        </details>
 
         <Button type="submit" disabled={isSubmitting || !isDirty} fullWidth>
           {isSubmitting ? "Opslaan…" : "Opslaan"}

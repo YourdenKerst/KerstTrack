@@ -42,18 +42,20 @@ export function useAllSupplements(userId: string) {
   });
 }
 
-export type NewSupplement = Pick<
-  Supplement,
-  "name" | "dose_label" | "timing_label" | "reminder_time" | "linked_nutrient_key" | "linked_nutrient_amount" | "sort_order"
->;
+export type NewSupplement = Pick<Supplement, "name" | "sort_order">;
 
 export function useAddSupplement(userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (values: NewSupplement) => {
+    mutationFn: async (values: NewSupplement): Promise<Supplement> => {
       const supabase = createClient();
-      const { error } = await supabase.from("supplements").insert({ ...values, user_id: userId });
+      const { data, error } = await supabase
+        .from("supplements")
+        .insert({ ...values, user_id: userId })
+        .select("*")
+        .single();
       if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: supplementsKey(userId) });

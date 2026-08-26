@@ -3,7 +3,7 @@
 import { ChefHat, Plus, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Button, Card, Input, Label } from "@/components/ui";
+import { Button, Card, ImageUploadField, Input, Label } from "@/components/ui";
 import { RecipeIngredientPicker, type PickedIngredient } from "@/components/log/RecipeIngredientPicker";
 import { scaleRecipeToGrams, sumRecipeIngredients, totalRecipeGrams } from "@/lib/calculations/recipes";
 import { todayISO } from "@/lib/date";
@@ -17,15 +17,15 @@ import {
 } from "@/lib/queries/recipes";
 import { useUserId } from "@/lib/user-context";
 
-export default function MealPage() {
+export default function RecipePage() {
   return (
     <Suspense fallback={<div className="p-6 text-center text-sm text-muted-foreground">Laden…</div>}>
-      <MealPageContent />
+      <RecipePageContent />
     </Suspense>
   );
 }
 
-function MealPageContent() {
+function RecipePageContent() {
   const userId = useUserId();
   const searchParams = useSearchParams();
   const dateISO = searchParams.get("date") ?? todayISO();
@@ -40,8 +40,8 @@ function MealPageContent() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Stel een maaltijd samen uit meerdere ingrediënten — bereken één keer de voedingswaarde, log daarna steeds
-        hoeveel gram je ervan eet.
+        Stel een recept samen uit meerdere ingrediënten — bereken één keer de voedingswaarde, log daarna steeds
+        hoeveel gram je als maaltijd ervan eet.
       </p>
 
       <button
@@ -63,6 +63,7 @@ function MealPageContent() {
               userId={userId}
               recipeId={recipe.id}
               name={recipe.name}
+              imageUrl={recipe.image_url}
               dateISO={dateISO}
               expanded={expandedId === recipe.id}
               onToggle={() => setExpandedId((current) => (current === recipe.id ? null : recipe.id))}
@@ -78,6 +79,7 @@ function RecipeRow({
   userId,
   recipeId,
   name,
+  imageUrl,
   dateISO,
   expanded,
   onToggle,
@@ -85,6 +87,7 @@ function RecipeRow({
   userId: string;
   recipeId: string;
   name: string;
+  imageUrl: string | null;
   dateISO: string;
   expanded: boolean;
   onToggle: () => void;
@@ -100,7 +103,15 @@ function RecipeRow({
     if (!ingredients) return;
     const amount = grams ?? totalGrams;
     const scaled = scaleRecipeToGrams(ingredients, amount);
-    await addFoodLog.mutateAsync({ ...scaled, name: `${name} (${amount}g)`, log_date: dateISO, food_item_id: null });
+    await addFoodLog.mutateAsync({
+      ...scaled,
+      name: `${name} (${amount}g)`,
+      image_url: imageUrl,
+      recipe_id: recipeId,
+      ingredient_count: ingredients.length,
+      log_date: dateISO,
+      food_item_id: null,
+    });
     setLogged(true);
     window.setTimeout(() => setLogged(false), 1500);
   }
@@ -109,7 +120,12 @@ function RecipeRow({
     <Card className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={onToggle} className="flex flex-1 items-center gap-2 text-left">
-          <ChefHat size={16} className="shrink-0 text-muted-foreground" />
+          {imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- gebruikersfoto via Supabase Storage
+            <img src={imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+          ) : (
+            <ChefHat size={16} className="shrink-0 text-muted-foreground" />
+          )}
           <span className="truncate text-sm font-medium text-foreground">{name}</span>
         </button>
         <button
@@ -128,7 +144,7 @@ function RecipeRow({
         <div className="space-y-2 border-t border-border pt-2">
           <p className="text-[11px] text-muted-foreground">
             Totaal recept: {Math.round(totalGrams)}g · {Math.round(sumRecipeIngredients(ingredients).calories_kcal)}{" "}
-            kcal
+            kcal · {ingredients.length} producten
           </p>
           <div className="flex items-end gap-2">
             <div className="flex-1">
@@ -158,6 +174,7 @@ function RecipeCreator({ userId, onDone }: { userId: string; onDone: () => void 
   const addRecipe = useAddRecipe(userId);
   const addIngredient = useAddRecipeIngredient(userId);
   const [name, setName] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [ingredients, setIngredients] = useState<PickedIngredient[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -169,7 +186,7 @@ function RecipeCreator({ userId, onDone }: { userId: string; onDone: () => void 
     if (!name.trim() || ingredients.length === 0) return;
     setSaving(true);
     try {
-      const recipe = await addRecipe.mutateAsync(name.trim());
+      const recipe = await addRecipe.mutateAsync({ name: name.trim(), image_url: imageUrl });
       for (const [index, ingredient] of ingredients.entries()) {
         await addIngredient.mutateAsync({ ...ingredient, recipe_id: recipe.id, sort_order: index });
       }
@@ -181,8 +198,10 @@ function RecipeCreator({ userId, onDone }: { userId: string; onDone: () => void 
 
   return (
     <div className="space-y-3">
+      <ImageUploadField userId={userId} value={imageUrl} onChange={setImageUrl} />
+
       <div>
-        <Label htmlFor="recipe-name">Naam van de maaltijd</Label>
+        <Label htmlFor="recipe-name">Naam van het recept</Label>
         <Input id="recipe-name" placeholder="Bijv. cake" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
 

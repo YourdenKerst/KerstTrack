@@ -7,7 +7,7 @@ import { BarcodeScanner } from "@/components/food/BarcodeScanner";
 import { ScannedProductReview } from "@/components/food/ScannedProductReview";
 import { todayISO } from "@/lib/date";
 import { lookupBarcodeProduct, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
-import { findFoodItemByBarcode } from "@/lib/queries/foodItems";
+import { useAddFoodItem, findFoodItemByBarcode } from "@/lib/queries/foodItems";
 import { useLogFoodItem } from "@/lib/queries/foodLogs";
 import { useUserId } from "@/lib/user-context";
 
@@ -27,6 +27,7 @@ function ScanFoodPageContent() {
   const searchParams = useSearchParams();
   const dateISO = searchParams.get("date") ?? todayISO();
   const logFoodItem = useLogFoodItem(userId);
+  const addFoodItem = useAddFoodItem(userId);
 
   const [scannerOpen, setScannerOpen] = useState(true);
   const [status, setStatus] = useState<ScanStatus>("idle");
@@ -58,6 +59,24 @@ function ScanFoodPageContent() {
     } catch {
       setStatus("error");
     }
+  }
+
+  async function handleConfirm(grams: number) {
+    if (!scannedProduct) return;
+    const item = await addFoodItem.mutateAsync({
+      name: scannedProduct.name ?? "Gescand product",
+      barcode: scannedProduct.barcode,
+      image_url: scannedProduct.imageUrl,
+      calories_kcal: scannedProduct.caloriesKcal ?? 0,
+      protein_g: scannedProduct.proteinG ?? 0,
+      carbs_g: scannedProduct.carbsG ?? 0,
+      fat_g: scannedProduct.fatG ?? 0,
+      fiber_g: scannedProduct.fiberG ?? 0,
+      reference_grams: 100,
+    });
+    await logFoodItem.mutateAsync({ item, logDate: dateISO, grams });
+    setScannedProduct(null);
+    setStatus("logged");
   }
 
   function reset() {
@@ -121,15 +140,7 @@ function ScanFoodPageContent() {
       {scannerOpen && <BarcodeScanner onDetected={handleDetected} onClose={() => router.push("/")} />}
 
       {scannedProduct && (
-        <ScannedProductReview
-          product={scannedProduct}
-          onCancel={reset}
-          onConfirm={(values) => {
-            router.push(
-              `/log/new?date=${dateISO}&prefill=${encodeURIComponent(JSON.stringify({ ...values, barcode: scannedProduct.barcode }))}`,
-            );
-          }}
-        />
+        <ScannedProductReview product={scannedProduct} onCancel={reset} onConfirm={handleConfirm} />
       )}
     </div>
   );

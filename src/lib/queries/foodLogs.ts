@@ -1,7 +1,6 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MICRONUTRIENT_META } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 import type { FoodItem, FoodLog } from "@/lib/types";
 
@@ -64,24 +63,28 @@ export function useAddFoodLog(userId: string) {
   });
 }
 
-/** Log een favoriet met 1 tap: kopieert de macro's van het food_item naar een nieuwe log-rij. */
+/**
+ * Logt een opgeslagen product, herschaald naar een opgegeven hoeveelheid in
+ * gram (t.o.v. het item's `reference_grams`). Zonder `grams` wordt het item
+ * exact zo gelogd als opgeslagen.
+ */
 export function useLogFoodItem(userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ item, logDate }: { item: FoodItem; logDate: string }) => {
+    mutationFn: async ({ item, logDate, grams }: { item: FoodItem; logDate: string; grams?: number }) => {
       const supabase = createClient();
-      const micronutrients = Object.fromEntries(MICRONUTRIENT_META.map(({ key }) => [key, item[key]]));
+      const factor = grams != null ? grams / item.reference_grams : 1;
       const { error } = await supabase.from("food_logs").insert({
         user_id: userId,
         food_item_id: item.id,
         name: item.name,
-        calories_kcal: item.calories_kcal,
-        protein_g: item.protein_g,
-        carbs_g: item.carbs_g,
-        fat_g: item.fat_g,
-        fiber_g: item.fiber_g,
+        image_url: item.image_url,
+        calories_kcal: Math.round(item.calories_kcal * factor * 100) / 100,
+        protein_g: Math.round(item.protein_g * factor * 100) / 100,
+        carbs_g: Math.round(item.carbs_g * factor * 100) / 100,
+        fat_g: Math.round(item.fat_g * factor * 100) / 100,
+        fiber_g: Math.round(item.fiber_g * factor * 100) / 100,
         log_date: logDate,
-        ...micronutrients,
       });
       if (error) throw error;
     },

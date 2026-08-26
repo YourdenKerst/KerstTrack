@@ -68,10 +68,10 @@ export function ReminderSettingsCard() {
       )}
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Het tijdstip stel je per supplement in bij &ldquo;Supplementenschema beheren&rdquo;. Supplementen zonder
-        tijdstip krijgen een melding rond 09:00, 13:00 en 20:00 — maar alleen zolang je ze nog niet hebt afgevinkt.
-        Best-effort: werkt direct op Android/desktop zolang de app open is. Op iPhone alleen als de app is
-        toegevoegd aan het beginscherm (vanaf iOS 16.4) — en ook dan alleen zolang die niet volledig is afgesloten.
+        De tijdstippen en herhaling stel je per supplement in bij het Supplementen-tabblad — maar alleen zolang je
+        ze nog niet hebt afgevinkt. Best-effort: werkt direct op Android/desktop zolang de app open is. Op iPhone
+        alleen als de app is toegevoegd aan het beginscherm (vanaf iOS 16.4) — en ook dan alleen zolang die niet
+        volledig is afgesloten.
       </p>
     </Card>
   );

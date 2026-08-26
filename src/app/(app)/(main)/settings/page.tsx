@@ -1,20 +1,13 @@
 "use client";
 
-import { ChevronRight, LogOut, Pill } from "lucide-react";
+import { ChevronRight, LogOut, Settings2, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CameraPermissionCard } from "@/components/settings/CameraPermissionCard";
-import { ProfileForm } from "@/components/settings/ProfileForm";
-import { ReminderSettingsCard } from "@/components/settings/ReminderSettingsCard";
-import { TargetsForm } from "@/components/settings/TargetsForm";
-import { ThemeToggle } from "@/components/settings/ThemeToggle";
 import { Button, Card } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
-import { useUserId } from "@/lib/user-context";
 
 export default function SettingsPage() {
-  const userId = useUserId();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -32,38 +25,22 @@ export default function SettingsPage() {
         <h1 className="text-xl font-semibold text-foreground">Instellingen</h1>
       </header>
 
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Weergave</h2>
-        <ThemeToggle />
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Dagdoelen</h2>
-        <TargetsForm userId={userId} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Profiel</h2>
-        <ProfileForm userId={userId} />
-      </Card>
-
-      <ReminderSettingsCard />
-
-      <CameraPermissionCard />
-
       <Card className="p-0">
-        <Link href="/supplements" className="flex items-center justify-between gap-2 p-4">
+        <Link href="/settings/system" className="flex items-center justify-between gap-2 p-4">
           <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <Pill size={16} className="text-muted-foreground" />
-            Supplementenschema beheren
+            <Settings2 size={16} className="text-muted-foreground" />
+            Systeeminstellingen
           </span>
           <ChevronRight size={16} className="text-muted-foreground" />
         </Link>
       </Card>
 
       <Card className="p-0">
-        <Link href="/settings/nutrients" className="flex items-center justify-between gap-2 p-4">
-          <span className="text-sm font-medium text-foreground">Micronutriënten-referentie</span>
+        <Link href="/settings/profile" className="flex items-center justify-between gap-2 p-4">
+          <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <User size={16} className="text-muted-foreground" />
+            Profielinstellingen
+          </span>
           <ChevronRight size={16} className="text-muted-foreground" />
         </Link>
       </Card>

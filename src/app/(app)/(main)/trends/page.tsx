@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { AlcoholCorrelationCards } from "@/components/trends/AlcoholCorrelationCards";
-import { MacroAdherenceChart } from "@/components/trends/MacroAdherenceChart";
 import { StreakCalendar } from "@/components/trends/StreakCalendar";
 import { WaterAdherenceChart } from "@/components/trends/WaterAdherenceChart";
 import { WeightChart } from "@/components/weight/WeightChart";
@@ -11,7 +10,6 @@ import { Card } from "@/components/ui";
 import { addDaysISO, periodStartISO, todayISO, type Period } from "@/lib/date";
 import { useAlcoholLogsForRange } from "@/lib/queries/alcoholLogs";
 import { useDailyTargets } from "@/lib/queries/dailyTargets";
-import { useFoodLogsForRange } from "@/lib/queries/foodLogs";
 import { useSupplements } from "@/lib/queries/supplements";
 import { useSupplementLogsForRange } from "@/lib/queries/supplementLogs";
 import { useWaterLogsForRange } from "@/lib/queries/waterLogs";
@@ -34,7 +32,6 @@ export default function TrendsPage() {
 
   const { data: targets } = useDailyTargets(userId);
   const { data: weightLogs } = useWeightLogsForRange(userId, start, today);
-  const { data: foodLogs } = useFoodLogsForRange(userId, start, today);
   const { data: supplements } = useSupplements(userId);
   const { data: supplementLogs } = useSupplementLogsForRange(userId, start, today);
   const { data: waterLogs } = useWaterLogsForRange(userId, start, today);
@@ -50,26 +47,14 @@ export default function TrendsPage() {
         <h1 className="text-xl font-semibold text-foreground">Trends</h1>
       </header>
 
-      <PeriodSelector value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+      <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-3">
+        <p className="mb-2 text-xs font-medium text-foreground">Periode</p>
+        <PeriodSelector value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+      </div>
 
       <Card>
         <h2 className="mb-2 text-sm font-semibold text-foreground">Gewicht over tijd</h2>
         <WeightChart logs={weightLogs ?? []} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Macro-adherence</h2>
-        <MacroAdherenceChart logs={foodLogs ?? []} targets={targets} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Supplement-streaks</h2>
-        <StreakCalendar
-          logs={supplementLogs ?? []}
-          totalActiveSupplements={supplements?.length ?? 0}
-          startISO={start}
-          endISO={today}
-        />
       </Card>
 
       <Card>
@@ -78,6 +63,16 @@ export default function TrendsPage() {
           waterLogs={waterLogs ?? []}
           alcoholLogs={alcoholLogs ?? []}
           targets={targets}
+          startISO={start}
+          endISO={today}
+        />
+      </Card>
+
+      <Card>
+        <h2 className="mb-2 text-sm font-semibold text-foreground">Supplement-streaks</h2>
+        <StreakCalendar
+          logs={supplementLogs ?? []}
+          totalActiveSupplements={supplements?.length ?? 0}
           startISO={start}
           endISO={today}
         />

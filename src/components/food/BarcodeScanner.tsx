@@ -1,6 +1,6 @@
 "use client";
 
-import { Flashlight, FlashlightOff, X } from "lucide-react";
+import { Camera, Flashlight, FlashlightOff, Loader2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { QuaggaJSResultObject } from "@ericblade/quagga2";
 
@@ -9,11 +9,23 @@ interface BarcodeScannerProps {
   onClose: () => void;
 }
 
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [decodingPhoto, setDecodingPhoto] = useState(false);
+  const [photoNotFound, setPhotoNotFound] = useState(false);
 
   useEffect(() => {
     const target = viewportRef.current;
@@ -90,6 +102,32 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
     };
   }, [onDetected]);
 
+  async function handlePhotoFile(file: File | undefined) {
+    if (!file) return;
+    setDecodingPhoto(true);
+    setPhotoNotFound(false);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const { default: Quagga } = await import("@ericblade/quagga2");
+      const result = await Quagga.decodeSingle({
+        src: dataUrl,
+        locator: { patchSize: "large", halfSample: false },
+        decoder: { readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader"] },
+        locate: true,
+      });
+      const code = result?.codeResult?.code;
+      if (code) {
+        onDetected(code);
+      } else {
+        setPhotoNotFound(true);
+      }
+    } catch {
+      setPhotoNotFound(true);
+    } finally {
+      setDecodingPhoto(false);
+    }
+  }
+
   async function toggleTorch() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- zie boot() hierboven
     const Quagga = (await import("@ericblade/quagga2")).default as any;
@@ -139,14 +177,43 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
         <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-2xl border-2 border-white/70" />
       </div>
 
-      {error ? (
-        <p className="p-4 text-center text-sm text-white">{error}</p>
-      ) : (
-        <p className="p-4 text-center text-xs text-white/70">
-          Houd de streepjescode plat en binnen het kader, ook als hij verfrommeld of schuin is — vul aan met meer
-          licht of het lampje hierboven als hij niet gevonden wordt.
+      <div className="space-y-2 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+        {error ? (
+          <p className="text-center text-sm text-white">{error}</p>
+        ) : (
+          <p className="text-center text-xs text-white/70">
+            Houd de streepjescode plat en binnen het kader, ook als hij verfrommeld of schuin is — vul aan met meer
+            licht of het lampje hierboven als hij niet gevonden wordt.
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={() => photoInputRef.current?.click()}
+          disabled={decodingPhoto}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 py-2.5 text-xs font-medium text-white disabled:opacity-60"
+        >
+          {decodingPhoto ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+          {decodingPhoto ? "Foto verwerken…" : "Of maak een foto van de code"}
+        </button>
+        {photoNotFound && (
+          <p className="text-center text-xs text-white/70">
+            Geen streepjescode gevonden op deze foto — probeer het opnieuw met meer licht of dichterbij.
+          </p>
+        )}
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => handlePhotoFile(e.target.files?.[0])}
+        />
+        <p className="text-center text-[10px] text-white/50">
+          Handig als je telkens opnieuw om cameratoegang wordt gevraagd — dit gebruikt de camera-app van je
+          toestel in plaats van live scannen.
         </p>
-      )}
+      </div>
     </div>
   );
 }

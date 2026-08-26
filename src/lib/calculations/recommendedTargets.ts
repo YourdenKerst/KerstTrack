@@ -1,5 +1,5 @@
 import { differenceInYears } from "date-fns";
-import type { MicronutrientTargetFields, Sex } from "@/lib/types";
+import type { Sex } from "@/lib/types";
 
 export type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
 export type GoalPlan = "afvallen" | "onderhoud" | "spieropbouw";
@@ -17,6 +17,8 @@ export interface PaceRange {
   max: number;
   default: number;
   step: number;
+  /** Vanaf deze waarde markeert de UI het tempo als agressiever/minder veilig (rood + disclaimer). */
+  dangerAbove: number;
 }
 
 export interface GoalPlanDef {
@@ -31,41 +33,27 @@ export interface GoalPlanDef {
 }
 
 export const GOAL_PLANS: GoalPlanDef[] = [
-  { key: "afvallen", label: "Afvallen", direction: -1, paceRange: { min: 0.25, max: 1, default: 0.5, step: 0.05 }, proteinPerKg: 2.0, fatPct: 0.25 },
+  {
+    key: "afvallen",
+    label: "Afvallen",
+    direction: -1,
+    paceRange: { min: 0.25, max: 1.5, default: 0.5, step: 0.05, dangerAbove: 1.0 },
+    proteinPerKg: 2.0,
+    fatPct: 0.25,
+  },
   { key: "onderhoud", label: "Onderhoud", direction: 0, paceRange: null, proteinPerKg: 1.6, fatPct: 0.3 },
-  { key: "spieropbouw", label: "Spieropbouw", direction: 1, paceRange: { min: 0.1, max: 0.4, default: 0.25, step: 0.05 }, proteinPerKg: 2.0, fatPct: 0.25 },
+  {
+    key: "spieropbouw",
+    label: "Spieropbouw",
+    direction: 1,
+    paceRange: { min: 0.1, max: 0.4, default: 0.25, step: 0.05, dangerAbove: 0.35 },
+    proteinPerKg: 2.0,
+    fatPct: 0.25,
+  },
 ];
 
 /** Vuistregel: 1 kg lichaamsvet komt ongeveer overeen met 7700 kcal. */
 const KCAL_PER_KG_BODYWEIGHT = 7700;
-
-/** Algemene richtwaarden per geslacht — zie constants.ts voor de bron/toelichting. */
-const MICRONUTRIENT_RDA: Record<Sex, MicronutrientTargetFields> = {
-  male: {
-    vitamin_d_mcg: 15,
-    magnesium_mg: 400,
-    vitamin_b1_mg: 1.2,
-    vitamin_b6_mg: 1.5,
-    vitamin_b12_mcg: 3.2,
-    omega3_mg: 375,
-    zinc_mg: 11,
-    potassium_mg: 4100,
-    calcium_mg: 1000,
-    iron_mg: 9.5,
-  },
-  female: {
-    vitamin_d_mcg: 15,
-    magnesium_mg: 310,
-    vitamin_b1_mg: 1.1,
-    vitamin_b6_mg: 1.5,
-    vitamin_b12_mcg: 3.2,
-    omega3_mg: 375,
-    zinc_mg: 8,
-    potassium_mg: 3500,
-    calcium_mg: 1000,
-    iron_mg: 18,
-  },
-};
 
 export function calculateAge(birthDateISO: string, onDateISO: string): number {
   return differenceInYears(new Date(`${onDateISO}T00:00:00`), new Date(`${birthDateISO}T00:00:00`));
@@ -88,7 +76,7 @@ export interface RecommendedTargetsInput {
   paceKgPerWeek?: number;
 }
 
-export interface RecommendedTargets extends MicronutrientTargetFields {
+export interface RecommendedTargets {
   calories_kcal: number;
   protein_g: number;
   carbs_g: number;
@@ -125,6 +113,5 @@ export function calculateRecommendedTargets(input: RecommendedTargetsInput): Rec
     fat_g: fat,
     fiber_g: fiber,
     water_ml: water,
-    ...MICRONUTRIENT_RDA[input.sex],
   };
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { GENERIC_REMINDER_TIMES, getReminderSettings, subscribeToReminderSettings } from "@/lib/notifications";
+import { getReminderSettings, subscribeToReminderSettings } from "@/lib/notifications";
+import { isReminderDueOnDate } from "@/lib/calculations/supplementReminders";
 import { todayISO } from "@/lib/date";
+import { useAllSupplementReminders } from "@/lib/queries/supplementReminders";
 import { useSupplementLogsForDate } from "@/lib/queries/supplementLogs";
 import { useSupplements } from "@/lib/queries/supplements";
 import type { Supplement } from "@/lib/types";
@@ -21,7 +23,7 @@ async function showReminder(supplement: Supplement) {
   if (!("serviceWorker" in navigator)) return;
   const registration = await navigator.serviceWorker.ready;
   registration.showNotification("Supplement-herinnering", {
-    body: `Nog niet afgevinkt: ${supplement.name} (${supplement.dose_label}).`,
+    body: `Nog niet afgevinkt: ${supplement.name}.`,
     icon: "/icons/icon-192.png",
     tag: `supplement-${supplement.id}`,
   });
@@ -32,20 +34,20 @@ async function showReminder(supplement: Supplement) {
  * de app (tab of geïnstalleerde PWA) open/geladen is. Zie de toelichting bij
  * de instelling in Settings.
  *
- * Per supplement: een eigen `reminder_time` geeft één melding op dat exacte
- * tijdstip; zonder tijdstip valt het terug op drie vaste algemene momenten.
- * Al afgevinkte supplementen worden overgeslagen (en de planning herrekent
- * zodra dat verandert, via de query-afhankelijkheid op `todayLogs`).
+ * Elk supplement heeft tot 3 meldingsmomenten (zie SupplementManager), elk
+ * met een eigen herhaalpatroon. Alleen momenten die vandaag aan de beurt zijn
+ * en nog niet zijn afgevinkt worden ingepland.
  */
 export function SupplementReminders() {
   const userId = useUserId();
   const today = todayISO();
   const { data: supplements } = useSupplements(userId);
+  const { data: reminders } = useAllSupplementReminders(userId);
   const { data: todayLogs } = useSupplementLogsForDate(userId, today);
 
   useEffect(() => {
     if (typeof Notification === "undefined") return;
-    if (!supplements) return;
+    if (!supplements || !reminders) return;
 
     let timers: number[] = [];
 
@@ -57,19 +59,16 @@ export function SupplementReminders() {
       if (!settings.enabled || Notification.permission !== "granted") return;
 
       const checkedIds = new Set((todayLogs ?? []).map((log) => log.supplement_id));
+      const supplementById = new Map((supplements ?? []).map((s) => [s.id, s]));
 
-      for (const supplement of supplements ?? []) {
-        if (checkedIds.has(supplement.id)) continue;
+      for (const reminder of reminders ?? []) {
+        const supplement = supplementById.get(reminder.supplement_id);
+        if (!supplement || checkedIds.has(supplement.id)) continue;
+        if (!isReminderDueOnDate(reminder, today)) continue;
 
-        const times: readonly string[] = supplement.reminder_time
-          ? [supplement.reminder_time.slice(0, 5)]
-          : GENERIC_REMINDER_TIMES;
-
-        for (const time of times) {
-          const ms = msUntil(time);
-          if (ms === null) continue;
-          timers.push(window.setTimeout(() => showReminder(supplement), ms));
-        }
+        const ms = msUntil(reminder.reminder_time.slice(0, 5));
+        if (ms === null) continue;
+        timers.push(window.setTimeout(() => showReminder(supplement), ms));
       }
     }
 
@@ -79,7 +78,7 @@ export function SupplementReminders() {
       timers.forEach((t) => window.clearTimeout(t));
       unsubscribe();
     };
-  }, [supplements, todayLogs]);
+  }, [supplements, reminders, todayLogs, today]);
 
   return null;
 }

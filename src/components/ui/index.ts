@@ -5,3 +5,4 @@ export { Card } from "./Card";
 export { Label, FieldError } from "./Field";
 export { Toggle } from "./Toggle";
 export { CheckRow } from "./CheckRow";
+export { ImageUploadField } from "./ImageUploadField";

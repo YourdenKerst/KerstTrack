@@ -32,17 +32,6 @@ create table if not exists public.daily_targets (
   fiber_g numeric(6,1) not null,
   water_ml integer not null,
   alcohol_extra_water_ml integer not null default 500,
-  -- Micronutriënt-doelen (algemene richtwaarden, zie SCHEMA.md/constants.ts) — aanpasbaar in Settings.
-  vitamin_d_mcg numeric(6,2) not null default 15,
-  magnesium_mg numeric(6,1) not null default 375,
-  vitamin_b1_mg numeric(6,2) not null default 1.15,
-  vitamin_b6_mg numeric(6,2) not null default 1.5,
-  vitamin_b12_mcg numeric(6,2) not null default 3.2,
-  omega3_mg numeric(6,1) not null default 375,
-  zinc_mg numeric(6,1) not null default 11,
-  potassium_mg numeric(7,1) not null default 4100,
-  calcium_mg numeric(7,1) not null default 1000,
-  iron_mg numeric(6,2) not null default 9.5,
   updated_at timestamptz not null default now()
 );
 
@@ -54,22 +43,12 @@ create table if not exists public.food_items (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   barcode text,
+  image_url text,
   calories_kcal numeric(6,1) not null,
   protein_g numeric(6,1) not null default 0,
   carbs_g numeric(6,1) not null default 0,
   fat_g numeric(6,1) not null default 0,
   fiber_g numeric(6,1) not null default 0,
-  -- Micronutriënten: null = onbekend (telt niet als 0 mee in dagtotalen, zie lib/calculations).
-  vitamin_d_mcg numeric(6,2),
-  magnesium_mg numeric(6,1),
-  vitamin_b1_mg numeric(6,2),
-  vitamin_b6_mg numeric(6,2),
-  vitamin_b12_mcg numeric(6,2),
-  omega3_mg numeric(6,1),
-  zinc_mg numeric(6,1),
-  potassium_mg numeric(7,1),
-  calcium_mg numeric(7,1),
-  iron_mg numeric(6,2),
   -- Hoeveel gram de bovenstaande waarden vertegenwoordigen — nodig om dit item
   -- correct te kunnen herschalen als receptingrediënt (zie recipe_ingredients).
   reference_grams numeric(7,1) not null default 100,
@@ -85,22 +64,15 @@ create table if not exists public.food_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   food_item_id uuid references public.food_items(id) on delete set null,
+  recipe_id uuid references public.recipes(id) on delete set null,
   name text not null,
+  image_url text,
+  ingredient_count integer,
   calories_kcal numeric(6,1) not null,
   protein_g numeric(6,1) not null default 0,
   carbs_g numeric(6,1) not null default 0,
   fat_g numeric(6,1) not null default 0,
   fiber_g numeric(6,1) not null default 0,
-  vitamin_d_mcg numeric(6,2),
-  magnesium_mg numeric(6,1),
-  vitamin_b1_mg numeric(6,2),
-  vitamin_b6_mg numeric(6,2),
-  vitamin_b12_mcg numeric(6,2),
-  omega3_mg numeric(6,1),
-  zinc_mg numeric(6,1),
-  potassium_mg numeric(7,1),
-  calcium_mg numeric(7,1),
-  iron_mg numeric(6,2),
   log_date date not null,
   logged_at timestamptz not null default now()
 );
@@ -113,26 +85,31 @@ create table if not exists public.supplements (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
-  dose_label text not null,
-  -- Vrije, beschrijvende tekst ("Bij ontbijt") — optioneel, los van reminder_time.
-  timing_label text,
-  -- Optioneel exact tijdstip (HH:MM) voor de pushmelding. Null = val terug op
-  -- 3 generieke momenten (ochtend/middag/avond), zie SupplementReminders.tsx.
-  reminder_time time,
-  -- Optionele koppeling aan een micronutriënt: afvinken telt dan de dosis mee
-  -- bij de dagtotalen op het dashboard/voeding (zie lib/calculations/micronutrients.ts).
-  linked_nutrient_key text check (
-    linked_nutrient_key in (
-      'vitamin_d_mcg', 'magnesium_mg', 'vitamin_b1_mg', 'vitamin_b6_mg', 'vitamin_b12_mcg',
-      'omega3_mg', 'zinc_mg', 'potassium_mg', 'calcium_mg', 'iron_mg'
-    )
-  ),
-  linked_nutrient_amount numeric(7,2),
   sort_order integer not null default 0,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 create index if not exists supplements_user_idx on public.supplements(user_id, is_active);
+
+-- =========================================================
+-- 5b. supplement_reminders — tot 3 meldingsmomenten per supplement.
+-- Slot 1 is in de app verplicht, 2 en 3 optioneel. Elk moment heeft een eigen
+-- tijdstip en herhaalpatroon (elke dag / elke N dagen / een vaste weekdag).
+-- =========================================================
+create table if not exists public.supplement_reminders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  supplement_id uuid not null references public.supplements(id) on delete cascade,
+  slot smallint not null check (slot in (1, 2, 3)),
+  reminder_time time not null,
+  recurrence_type text not null check (recurrence_type in ('daily', 'every_n_days', 'weekly')),
+  -- Alleen relevant bij recurrence_type = 'every_n_days' (2/3/4).
+  recurrence_n smallint,
+  -- Alleen relevant bij recurrence_type = 'weekly' (0 = maandag ... 6 = zondag).
+  recurrence_weekday smallint,
+  unique (supplement_id, slot)
+);
+create index if not exists supplement_reminders_supplement_idx on public.supplement_reminders(supplement_id);
 
 -- =========================================================
 -- 6. supplement_logs — dagelijkse afvink-checkoffs
@@ -205,6 +182,7 @@ create table if not exists public.recipes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  image_url text,
   created_at timestamptz not null default now()
 );
 create index if not exists recipes_user_idx on public.recipes(user_id);
@@ -219,22 +197,13 @@ create table if not exists public.recipe_ingredients (
   user_id uuid not null references auth.users(id) on delete cascade,
   recipe_id uuid not null references public.recipes(id) on delete cascade,
   name text not null,
+  image_url text,
   grams numeric(7,1) not null,
   calories_kcal_per_100g numeric(7,2) not null,
   protein_g_per_100g numeric(7,2) not null default 0,
   carbs_g_per_100g numeric(7,2) not null default 0,
   fat_g_per_100g numeric(7,2) not null default 0,
   fiber_g_per_100g numeric(7,2) not null default 0,
-  vitamin_d_mcg_per_100g numeric(7,2),
-  magnesium_mg_per_100g numeric(7,2),
-  vitamin_b1_mg_per_100g numeric(7,2),
-  vitamin_b6_mg_per_100g numeric(7,2),
-  vitamin_b12_mcg_per_100g numeric(7,2),
-  omega3_mg_per_100g numeric(7,2),
-  zinc_mg_per_100g numeric(7,2),
-  potassium_mg_per_100g numeric(7,2),
-  calcium_mg_per_100g numeric(7,2),
-  iron_mg_per_100g numeric(7,2),
   sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
@@ -248,6 +217,7 @@ alter table public.daily_targets enable row level security;
 alter table public.food_items enable row level security;
 alter table public.food_logs enable row level security;
 alter table public.supplements enable row level security;
+alter table public.supplement_reminders enable row level security;
 alter table public.supplement_logs enable row level security;
 alter table public.correction_checkoffs enable row level security;
 alter table public.water_logs enable row level security;
@@ -270,6 +240,9 @@ create policy "food_logs_self" on public.food_logs for all using (auth.uid() = u
 
 drop policy if exists "supplements_self" on public.supplements;
 create policy "supplements_self" on public.supplements for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "supplement_reminders_self" on public.supplement_reminders;
+create policy "supplement_reminders_self" on public.supplement_reminders for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "supplement_logs_self" on public.supplement_logs;
 create policy "supplement_logs_self" on public.supplement_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -322,48 +295,14 @@ create trigger on_auth_user_created
 
 -- =========================================================
 -- Migratie: bestaande databases bijwerken met kolommen die na de eerste
--- versie zijn toegevoegd (barcode scannen + micronutriënten). Veilig om
--- opnieuw te draaien — voegt alleen toe wat nog ontbreekt.
+-- versie zijn toegevoegd (barcode scannen). Veilig om opnieuw te draaien.
 -- =========================================================
 alter table public.food_items add column if not exists barcode text;
-alter table public.food_items add column if not exists vitamin_d_mcg numeric(6,2);
-alter table public.food_items add column if not exists magnesium_mg numeric(6,1);
-alter table public.food_items add column if not exists vitamin_b1_mg numeric(6,2);
-alter table public.food_items add column if not exists vitamin_b6_mg numeric(6,2);
-alter table public.food_items add column if not exists vitamin_b12_mcg numeric(6,2);
-alter table public.food_items add column if not exists omega3_mg numeric(6,1);
-alter table public.food_items add column if not exists zinc_mg numeric(6,1);
-alter table public.food_items add column if not exists potassium_mg numeric(7,1);
-alter table public.food_items add column if not exists calcium_mg numeric(7,1);
-alter table public.food_items add column if not exists iron_mg numeric(6,2);
 create index if not exists food_items_barcode_idx on public.food_items(user_id, barcode) where barcode is not null;
-
-alter table public.food_logs add column if not exists vitamin_d_mcg numeric(6,2);
-alter table public.food_logs add column if not exists magnesium_mg numeric(6,1);
-alter table public.food_logs add column if not exists vitamin_b1_mg numeric(6,2);
-alter table public.food_logs add column if not exists vitamin_b6_mg numeric(6,2);
-alter table public.food_logs add column if not exists vitamin_b12_mcg numeric(6,2);
-alter table public.food_logs add column if not exists omega3_mg numeric(6,1);
-alter table public.food_logs add column if not exists zinc_mg numeric(6,1);
-alter table public.food_logs add column if not exists potassium_mg numeric(7,1);
-alter table public.food_logs add column if not exists calcium_mg numeric(7,1);
-alter table public.food_logs add column if not exists iron_mg numeric(6,2);
-
-alter table public.daily_targets add column if not exists vitamin_d_mcg numeric(6,2) not null default 15;
-alter table public.daily_targets add column if not exists magnesium_mg numeric(6,1) not null default 375;
-alter table public.daily_targets add column if not exists vitamin_b1_mg numeric(6,2) not null default 1.15;
-alter table public.daily_targets add column if not exists vitamin_b6_mg numeric(6,2) not null default 1.5;
-alter table public.daily_targets add column if not exists vitamin_b12_mcg numeric(6,2) not null default 3.2;
-alter table public.daily_targets add column if not exists omega3_mg numeric(6,1) not null default 375;
-alter table public.daily_targets add column if not exists zinc_mg numeric(6,1) not null default 11;
-alter table public.daily_targets add column if not exists potassium_mg numeric(7,1) not null default 4100;
-alter table public.daily_targets add column if not exists calcium_mg numeric(7,1) not null default 1000;
-alter table public.daily_targets add column if not exists iron_mg numeric(6,2) not null default 9.5;
 
 -- =========================================================
 -- Migratie: profielvelden (naam/geslacht/geboortedatum voor de doelen-
--- rekenmachine) en supplement-uitbreidingen (optioneel tijdstip,
--- koppeling aan een micronutriënt).
+-- rekenmachine).
 -- =========================================================
 alter table public.profiles add column if not exists display_name text;
 alter table public.profiles add column if not exists sex text;
@@ -376,24 +315,6 @@ begin
   end if;
 end $$;
 alter table public.profiles add column if not exists birth_date date;
-
-alter table public.supplements alter column timing_label drop not null;
-alter table public.supplements add column if not exists reminder_time time;
-alter table public.supplements add column if not exists linked_nutrient_key text;
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'supplements_linked_nutrient_key_check'
-  ) then
-    alter table public.supplements add constraint supplements_linked_nutrient_key_check check (
-      linked_nutrient_key in (
-        'vitamin_d_mcg', 'magnesium_mg', 'vitamin_b1_mg', 'vitamin_b6_mg', 'vitamin_b12_mcg',
-        'omega3_mg', 'zinc_mg', 'potassium_mg', 'calcium_mg', 'iron_mg'
-      )
-    );
-  end if;
-end $$;
-alter table public.supplements add column if not exists linked_nutrient_amount numeric(7,2);
 
 -- =========================================================
 -- Migratie: doel als vaste keuze (i.p.v. vrije tekst) + tempo-slider, en een
@@ -426,6 +347,7 @@ create table if not exists public.recipes (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  image_url text,
   created_at timestamptz not null default now()
 );
 create index if not exists recipes_user_idx on public.recipes(user_id);
@@ -435,22 +357,13 @@ create table if not exists public.recipe_ingredients (
   user_id uuid not null references auth.users(id) on delete cascade,
   recipe_id uuid not null references public.recipes(id) on delete cascade,
   name text not null,
+  image_url text,
   grams numeric(7,1) not null,
   calories_kcal_per_100g numeric(7,2) not null,
   protein_g_per_100g numeric(7,2) not null default 0,
   carbs_g_per_100g numeric(7,2) not null default 0,
   fat_g_per_100g numeric(7,2) not null default 0,
   fiber_g_per_100g numeric(7,2) not null default 0,
-  vitamin_d_mcg_per_100g numeric(7,2),
-  magnesium_mg_per_100g numeric(7,2),
-  vitamin_b1_mg_per_100g numeric(7,2),
-  vitamin_b6_mg_per_100g numeric(7,2),
-  vitamin_b12_mcg_per_100g numeric(7,2),
-  omega3_mg_per_100g numeric(7,2),
-  zinc_mg_per_100g numeric(7,2),
-  potassium_mg_per_100g numeric(7,2),
-  calcium_mg_per_100g numeric(7,2),
-  iron_mg_per_100g numeric(7,2),
   sort_order integer not null default 0,
   created_at timestamptz not null default now()
 );
@@ -464,3 +377,120 @@ create policy "recipes_self" on public.recipes for all using (auth.uid() = user_
 
 drop policy if exists "recipe_ingredients_self" on public.recipe_ingredients;
 create policy "recipe_ingredients_self" on public.recipe_ingredients for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- =========================================================
+-- Migratie: micronutriënten volledig verwijderd (was te veel ruis, nooit
+-- overal even accuraat — barcode-macro's blijven volledig, dat is waar
+-- Open Food Facts betrouwbaar in is). Ook het koppelen van een supplement
+-- aan een micronutriënt verdwijnt hiermee.
+-- =========================================================
+alter table public.food_items drop column if exists vitamin_d_mcg;
+alter table public.food_items drop column if exists magnesium_mg;
+alter table public.food_items drop column if exists vitamin_b1_mg;
+alter table public.food_items drop column if exists vitamin_b6_mg;
+alter table public.food_items drop column if exists vitamin_b12_mcg;
+alter table public.food_items drop column if exists omega3_mg;
+alter table public.food_items drop column if exists zinc_mg;
+alter table public.food_items drop column if exists potassium_mg;
+alter table public.food_items drop column if exists calcium_mg;
+alter table public.food_items drop column if exists iron_mg;
+
+alter table public.food_logs drop column if exists vitamin_d_mcg;
+alter table public.food_logs drop column if exists magnesium_mg;
+alter table public.food_logs drop column if exists vitamin_b1_mg;
+alter table public.food_logs drop column if exists vitamin_b6_mg;
+alter table public.food_logs drop column if exists vitamin_b12_mcg;
+alter table public.food_logs drop column if exists omega3_mg;
+alter table public.food_logs drop column if exists zinc_mg;
+alter table public.food_logs drop column if exists potassium_mg;
+alter table public.food_logs drop column if exists calcium_mg;
+alter table public.food_logs drop column if exists iron_mg;
+
+alter table public.daily_targets drop column if exists vitamin_d_mcg;
+alter table public.daily_targets drop column if exists magnesium_mg;
+alter table public.daily_targets drop column if exists vitamin_b1_mg;
+alter table public.daily_targets drop column if exists vitamin_b6_mg;
+alter table public.daily_targets drop column if exists vitamin_b12_mcg;
+alter table public.daily_targets drop column if exists omega3_mg;
+alter table public.daily_targets drop column if exists zinc_mg;
+alter table public.daily_targets drop column if exists potassium_mg;
+alter table public.daily_targets drop column if exists calcium_mg;
+alter table public.daily_targets drop column if exists iron_mg;
+
+alter table public.recipe_ingredients drop column if exists vitamin_d_mcg_per_100g;
+alter table public.recipe_ingredients drop column if exists magnesium_mg_per_100g;
+alter table public.recipe_ingredients drop column if exists vitamin_b1_mg_per_100g;
+alter table public.recipe_ingredients drop column if exists vitamin_b6_mg_per_100g;
+alter table public.recipe_ingredients drop column if exists vitamin_b12_mcg_per_100g;
+alter table public.recipe_ingredients drop column if exists omega3_mg_per_100g;
+alter table public.recipe_ingredients drop column if exists zinc_mg_per_100g;
+alter table public.recipe_ingredients drop column if exists potassium_mg_per_100g;
+alter table public.recipe_ingredients drop column if exists calcium_mg_per_100g;
+alter table public.recipe_ingredients drop column if exists iron_mg_per_100g;
+
+alter table public.supplements drop column if exists linked_nutrient_key;
+alter table public.supplements drop column if exists linked_nutrient_amount;
+
+-- =========================================================
+-- Migratie: supplementen — dosis en tijdstip-tekst eruit, vervangen door tot
+-- 3 losse meldingsmomenten (zie supplement_reminders hierboven). Bestaand
+-- enkelvoudig reminder_time wordt (indien aanwezig) omgezet naar slot 1.
+-- =========================================================
+alter table public.supplements add column if not exists reminder_time time;
+
+create table if not exists public.supplement_reminders (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  supplement_id uuid not null references public.supplements(id) on delete cascade,
+  slot smallint not null check (slot in (1, 2, 3)),
+  reminder_time time not null,
+  recurrence_type text not null check (recurrence_type in ('daily', 'every_n_days', 'weekly')),
+  recurrence_n smallint,
+  recurrence_weekday smallint,
+  unique (supplement_id, slot)
+);
+create index if not exists supplement_reminders_supplement_idx on public.supplement_reminders(supplement_id);
+alter table public.supplement_reminders enable row level security;
+drop policy if exists "supplement_reminders_self" on public.supplement_reminders;
+create policy "supplement_reminders_self" on public.supplement_reminders for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+insert into public.supplement_reminders (user_id, supplement_id, slot, reminder_time, recurrence_type)
+select user_id, id, 1, coalesce(reminder_time, '09:00'::time), 'daily'
+from public.supplements
+where not exists (
+  select 1 from public.supplement_reminders where supplement_reminders.supplement_id = supplements.id
+);
+
+alter table public.supplements drop column if exists dose_label;
+alter table public.supplements drop column if exists timing_label;
+alter table public.supplements drop column if exists reminder_time;
+
+-- =========================================================
+-- Migratie: afbeeldingen bij producten, recepten en logs; recept-koppeling
+-- en ingrediëntenaantal op food_logs voor de kaartjes op het dashboard.
+-- =========================================================
+alter table public.food_items add column if not exists image_url text;
+alter table public.recipes add column if not exists image_url text;
+alter table public.recipe_ingredients add column if not exists image_url text;
+alter table public.food_logs add column if not exists image_url text;
+alter table public.food_logs add column if not exists ingredient_count integer;
+alter table public.food_logs add column if not exists recipe_id uuid references public.recipes(id) on delete set null;
+
+-- Opslag-bucket voor zelf toegevoegde productfoto's. Publiek leesbaar (het zijn
+-- alleen foto's van eten, geen gevoelige data) zodat een <img src> zonder
+-- signed URL werkt; alleen de ingelogde gebruiker mag uploaden/verwijderen.
+insert into storage.buckets (id, name, public)
+values ('food-images', 'food-images', true)
+on conflict (id) do nothing;
+
+drop policy if exists "food_images_read" on storage.objects;
+create policy "food_images_read" on storage.objects for select
+  using (bucket_id = 'food-images');
+
+drop policy if exists "food_images_write" on storage.objects;
+create policy "food_images_write" on storage.objects for insert to authenticated
+  with check (bucket_id = 'food-images');
+
+drop policy if exists "food_images_delete" on storage.objects;
+create policy "food_images_delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'food-images');

@@ -24,14 +24,11 @@ export function SupplementChecklist({ userId, dateISO }: { userId: string; dateI
         {(supplements ?? []).map((s) => {
           const log = logBySupplementId.get(s.id);
           const checked = Boolean(log);
-          const sublabel = checked
-            ? `${s.timing_label} · ${s.dose_label} · afgevinkt om ${format(new Date(log!.checked_at), "HH:mm")}`
-            : `${s.timing_label} · ${s.dose_label}`;
           return (
             <CheckRow
               key={s.id}
               label={s.name}
-              sublabel={sublabel}
+              sublabel={checked ? `Afgevinkt om ${format(new Date(log!.checked_at), "HH:mm")}` : undefined}
               checked={checked}
               onToggle={() => toggle.mutate({ supplementId: s.id, logDate: dateISO, checked: !checked })}
               disabled={toggle.isPending}

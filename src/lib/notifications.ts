@@ -9,9 +9,6 @@ const DEFAULTS: ReminderSettings = {
   enabled: false,
 };
 
-/** Vaste momenten voor supplementen zonder een eigen `reminder_time` (zie SupplementManager). */
-export const GENERIC_REMINDER_TIMES = ["09:00", "13:00", "20:00"] as const;
-
 // useSyncExternalStore requires getSnapshot to return a referentially stable
 // value when nothing changed — recomputing a fresh object on every call caused
 // an infinite render loop (crash) as soon as a setting was actually stored.

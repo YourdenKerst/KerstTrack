@@ -13,15 +13,15 @@ export function PeriodSelector({
   options: { value: Period; label: string }[];
 }) {
   return (
-    <div className="flex gap-1 rounded-xl bg-surface-muted p-1">
+    <div className="flex gap-1 rounded-xl bg-surface p-1">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onChange(opt.value)}
           className={clsx(
-            "flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
-            value === opt.value ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground",
+            "flex-1 rounded-lg px-2 py-2 text-sm font-semibold transition-colors",
+            value === opt.value ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground active:bg-surface-muted",
           )}
         >
           {opt.label}

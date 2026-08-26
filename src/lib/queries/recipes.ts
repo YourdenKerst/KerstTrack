@@ -48,9 +48,13 @@ export function useRecipeIngredients(recipeId: string | null) {
 export function useAddRecipe(userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (name: string): Promise<Recipe> => {
+    mutationFn: async (values: { name: string; image_url: string | null }): Promise<Recipe> => {
       const supabase = createClient();
-      const { data, error } = await supabase.from("recipes").insert({ name, user_id: userId }).select("*").single();
+      const { data, error } = await supabase
+        .from("recipes")
+        .insert({ ...values, user_id: userId })
+        .select("*")
+        .single();
       if (error) throw error;
       return data;
     },

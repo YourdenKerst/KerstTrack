@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 
 const MODES = [
   { href: "/log/new", label: "Nieuw", icon: Plus },
-  { href: "/log/meal", label: "Maaltijd", icon: ChefHat },
+  { href: "/log/recipe", label: "Recept", icon: ChefHat },
   { href: "/log/search", label: "Zoek", icon: Search },
   { href: "/log/scan", label: "Scan", icon: Barcode },
 ] as const;
@@ -34,7 +34,7 @@ export default function LogLayout({ children }: { children: ReactNode }) {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 pb-28">{children}</div>
+      <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">{children}</div>
 
       <nav className="fixed inset-x-0 bottom-0 border-t border-border bg-surface/95 backdrop-blur-sm">
         <ul className="mx-auto flex max-w-md items-stretch justify-between px-1 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">

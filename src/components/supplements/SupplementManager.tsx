@@ -1,12 +1,8 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
-import { Button, Card, FieldError, Input, Label, Select } from "@/components/ui";
-import { MICRONUTRIENT_META } from "@/lib/constants";
+import { Button, Card, Input, Label, Select } from "@/components/ui";
 import {
   useAddSupplement,
   useAllSupplements,
@@ -14,83 +10,138 @@ import {
   useDeleteSupplementPermanently,
   useUpdateSupplement,
 } from "@/lib/queries/supplements";
-import type { MicronutrientKey, Supplement } from "@/lib/types";
+import {
+  useSetSupplementReminders,
+  useSupplementReminders,
+  type ReminderSlotInput,
+} from "@/lib/queries/supplementReminders";
+import type { RecurrenceType, Supplement } from "@/lib/types";
 
-const setValueAsNullableText = (raw: string) => (raw === "" ? null : raw);
-const setValueAsNullableNumber = (raw: string) => (raw === "" ? null : Number(raw));
+export const WEEKDAY_LABELS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
 
-const schema = z.object({
-  name: z.string().min(1, "Naam is verplicht"),
-  dose_label: z.string().min(1, "Dosis is verplicht"),
-  reminder_time: z.string().nullable(),
-  linked_nutrient_key: z.string().nullable(),
-  linked_nutrient_amount: z.number({ error: "Vul een getal in" }).nonnegative().nullable(),
-});
+const EVERY_N_DAYS_OPTIONS = [2, 3, 4];
 
-type FormValues = z.infer<typeof schema>;
-
-function nutrientLabel(key: string | null) {
-  return MICRONUTRIENT_META.find((m) => m.key === key)?.label;
+function emptySlot(slot: number): ReminderSlotInput {
+  return { slot, reminder_time: "09:00", recurrence_type: "daily", recurrence_n: null, recurrence_weekday: null };
 }
 
-function nutrientUnit(key: string | null) {
-  return MICRONUTRIENT_META.find((m) => m.key === key)?.unit ?? "";
+function recurrenceLabel(slot: ReminderSlotInput): string {
+  if (slot.recurrence_type === "daily") return "elke dag";
+  if (slot.recurrence_type === "every_n_days") return `elke ${slot.recurrence_n ?? 2} dagen`;
+  return `elke ${WEEKDAY_LABELS[slot.recurrence_weekday ?? 0].toLowerCase()}`;
 }
 
-function SupplementFields({
-  register,
-  errors,
-  watchedLinkedKey,
+function ReminderSlotFields({
+  slot,
+  onChange,
+  onRemove,
+  removable,
 }: {
-  register: ReturnType<typeof useForm<FormValues>>["register"];
-  errors: ReturnType<typeof useForm<FormValues>>["formState"]["errors"];
-  watchedLinkedKey: string | null;
+  slot: ReminderSlotInput;
+  onChange: (slot: ReminderSlotInput) => void;
+  onRemove?: () => void;
+  removable: boolean;
 }) {
   return (
-    <>
-      <div>
-        <Label>Naam</Label>
-        <Input placeholder="Bijv. Omega-3" {...register("name")} />
-        <FieldError>{errors.name?.message}</FieldError>
+    <div className="space-y-2 rounded-xl border border-border p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">Moment {slot.slot}</span>
+        {removable && onRemove && (
+          <button type="button" onClick={onRemove} aria-label="Verwijder dit moment" className="text-muted-foreground active:text-danger">
+            <X size={14} />
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <Label>Dosis</Label>
-          <Input placeholder="Bijv. 1000 mg" {...register("dose_label")} />
-          <FieldError>{errors.dose_label?.message}</FieldError>
-        </div>
-        <div>
-          <Label>Tijdstip (optioneel)</Label>
-          <Input type="time" {...register("reminder_time", { setValueAs: setValueAsNullableText })} />
-        </div>
-      </div>
-      <div>
-        <Label>Koppelen aan voedingsstof (optioneel)</Label>
-        <Select {...register("linked_nutrient_key", { setValueAs: setValueAsNullableText })}>
-          <option value="">Geen koppeling</option>
-          {MICRONUTRIENT_META.map((meta) => (
-            <option key={meta.key} value={meta.key}>
-              {meta.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      {watchedLinkedKey && (
-        <div>
-          <Label>Hoeveelheid per dosis ({nutrientUnit(watchedLinkedKey)})</Label>
+          <Label>Tijdstip</Label>
           <Input
-            type="number"
-            step="any"
-            min={0}
-            {...register("linked_nutrient_amount", { setValueAs: setValueAsNullableNumber })}
+            type="time"
+            value={slot.reminder_time}
+            onChange={(e) => onChange({ ...slot, reminder_time: e.target.value })}
           />
-          <FieldError>{errors.linked_nutrient_amount?.message}</FieldError>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Vul de hoeveelheid al om in {nutrientUnit(watchedLinkedKey)} — afvinken telt dit mee bij je dagtotaal.
-          </p>
+        </div>
+        <div>
+          <Label>Herhaling</Label>
+          <Select
+            value={slot.recurrence_type}
+            onChange={(e) => onChange({ ...slot, recurrence_type: e.target.value as RecurrenceType })}
+          >
+            <option value="daily">Elke dag</option>
+            <option value="every_n_days">Elke N dagen</option>
+            <option value="weekly">Vaste dag per week</option>
+          </Select>
+        </div>
+      </div>
+      {slot.recurrence_type === "every_n_days" && (
+        <div>
+          <Label>Elke hoeveel dagen?</Label>
+          <Select
+            value={String(slot.recurrence_n ?? 2)}
+            onChange={(e) => onChange({ ...slot, recurrence_n: Number(e.target.value) })}
+          >
+            {EVERY_N_DAYS_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                Elke {n} dagen
+              </option>
+            ))}
+          </Select>
         </div>
       )}
-    </>
+      {slot.recurrence_type === "weekly" && (
+        <div>
+          <Label>Welke dag?</Label>
+          <Select
+            value={String(slot.recurrence_weekday ?? 0)}
+            onChange={(e) => onChange({ ...slot, recurrence_weekday: Number(e.target.value) })}
+          >
+            {WEEKDAY_LABELS.map((label, index) => (
+              <option key={label} value={index}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SlotsEditor({ slots, onChange }: { slots: ReminderSlotInput[]; onChange: (slots: ReminderSlotInput[]) => void }) {
+  function updateSlot(index: number, next: ReminderSlotInput) {
+    onChange(slots.map((s, i) => (i === index ? next : s)));
+  }
+
+  function removeSlot(index: number) {
+    onChange(
+      slots
+        .filter((_, i) => i !== index)
+        .map((s, i) => ({ ...s, slot: i + 1 })),
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>Tijdstip voor inname</Label>
+      {slots.map((slot, index) => (
+        <ReminderSlotFields
+          key={index}
+          slot={slot}
+          onChange={(next) => updateSlot(index, next)}
+          onRemove={() => removeSlot(index)}
+          removable={index > 0}
+        />
+      ))}
+      {slots.length < 3 && (
+        <button
+          type="button"
+          onClick={() => onChange([...slots, emptySlot(slots.length + 1)])}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-xs font-medium text-muted-foreground transition-colors active:border-primary active:text-primary"
+        >
+          <Plus size={14} /> Nog een moment toevoegen (optioneel)
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -98,109 +149,104 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
   const [editing, setEditing] = useState(false);
   const update = useUpdateSupplement(userId);
   const deactivate = useDeactivateSupplement(userId);
-  const {
-    register,
-    handleSubmit,
-    control,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      name: supplement.name,
-      dose_label: supplement.dose_label,
-      reminder_time: supplement.reminder_time,
-      linked_nutrient_key: supplement.linked_nutrient_key,
-      linked_nutrient_amount: supplement.linked_nutrient_amount,
-    },
-  });
-  const watchedLinkedKey = useWatch({ control, name: "linked_nutrient_key" });
+  const setReminders = useSetSupplementReminders(userId);
+  const { data: existingReminders } = useSupplementReminders(supplement.id);
 
-  async function onSubmit(values: FormValues) {
-    await update.mutateAsync({ id: supplement.id, ...values, linked_nutrient_key: values.linked_nutrient_key as MicronutrientKey | null });
+  const [name, setName] = useState(supplement.name);
+  const [slots, setSlots] = useState<ReminderSlotInput[]>([emptySlot(1)]);
+
+  function startEditing() {
+    setName(supplement.name);
+    setSlots(
+      existingReminders && existingReminders.length > 0
+        ? existingReminders.map((r) => ({
+            slot: r.slot,
+            reminder_time: r.reminder_time.slice(0, 5),
+            recurrence_type: r.recurrence_type,
+            recurrence_n: r.recurrence_n,
+            recurrence_weekday: r.recurrence_weekday,
+          }))
+        : [emptySlot(1)],
+    );
+    setEditing(true);
+  }
+
+  async function handleSave() {
+    await update.mutateAsync({ id: supplement.id, name });
+    await setReminders.mutateAsync({ supplementId: supplement.id, slots });
     setEditing(false);
   }
 
   if (editing) {
     return (
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-2 border-b border-border py-3" noValidate>
-        <SupplementFields register={register} errors={errors} watchedLinkedKey={watchedLinkedKey} />
+      <div className="space-y-3 border-b border-border py-3">
+        <div>
+          <Label>Naam</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <SlotsEditor slots={slots} onChange={setSlots} />
         <div className="flex gap-2">
-          <Button type="submit" size="sm" disabled={isSubmitting}>
+          <Button type="button" size="sm" onClick={handleSave} disabled={!name.trim()}>
             Opslaan
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)}>
             Annuleren
           </Button>
         </div>
-      </form>
+      </div>
     );
   }
 
-  const linkedLabel = nutrientLabel(supplement.linked_nutrient_key);
-
   return (
     <div className="flex items-center justify-between gap-2 border-b border-border py-2.5 last:border-b-0">
-      <div className="min-w-0">
+      <button type="button" onClick={startEditing} className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm font-medium text-foreground">{supplement.name}</p>
         <p className="truncate text-xs text-muted-foreground">
-          {supplement.reminder_time ? supplement.reminder_time.slice(0, 5) : "Geen vast tijdstip"} ·{" "}
-          {supplement.dose_label}
-          {linkedLabel && ` · +${supplement.linked_nutrient_amount ?? 0}${nutrientUnit(supplement.linked_nutrient_key)} ${linkedLabel}`}
+          {existingReminders && existingReminders.length > 0
+            ? existingReminders
+                .map((r) => `${r.reminder_time.slice(0, 5)} (${recurrenceLabel({ ...r, reminder_time: r.reminder_time })})`)
+                .join(" · ")
+            : "Geen meldingen ingesteld"}
         </p>
-      </div>
-      <div className="flex shrink-0 gap-2">
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          aria-label={`Bewerk ${supplement.name}`}
-          className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-foreground active:bg-surface-muted active:text-foreground"
-        >
-          <Pencil size={14} />
-        </button>
-        <button
-          type="button"
-          onClick={() => deactivate.mutate(supplement.id)}
-          aria-label={`Verwijder ${supplement.name}`}
-          className="rounded-full p-2.5 text-muted-foreground transition-colors hover:bg-surface-muted hover:text-danger active:bg-surface-muted active:text-danger"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
+      </button>
+      <button
+        type="button"
+        onClick={() => deactivate.mutate(supplement.id)}
+        aria-label={`Verwijder ${supplement.name}`}
+        className="shrink-0 rounded-full p-2.5 text-muted-foreground transition-colors active:bg-surface-muted active:text-danger"
+      >
+        <Trash2 size={14} />
+      </button>
     </div>
   );
 }
 
 export function SupplementManager({ userId }: { userId: string }) {
   const { data: supplements } = useAllSupplements(userId);
-  const addSupplement = useAddSupplement(userId);
   const update = useUpdateSupplement(userId);
+  const addSupplement = useAddSupplement(userId);
+  const setReminders = useSetSupplementReminders(userId);
   const hardDelete = useDeleteSupplementPermanently(userId);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newSlots, setNewSlots] = useState<ReminderSlotInput[]>([emptySlot(1)]);
+  const [saving, setSaving] = useState(false);
 
   const active = (supplements ?? []).filter((s) => s.is_active);
   const inactive = (supplements ?? []).filter((s) => !s.is_active);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    control,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { name: "", dose_label: "", reminder_time: null, linked_nutrient_key: null, linked_nutrient_amount: null },
-  });
-  const watchedLinkedKey = useWatch({ control, name: "linked_nutrient_key" });
-
-  async function onSubmit(values: FormValues) {
-    await addSupplement.mutateAsync({
-      ...values,
-      linked_nutrient_key: values.linked_nutrient_key as MicronutrientKey | null,
-      timing_label: null,
-      sort_order: active.length,
-    });
-    reset();
-    setShowAddForm(false);
+  async function handleAdd() {
+    if (!newName.trim()) return;
+    setSaving(true);
+    try {
+      const supplement = await addSupplement.mutateAsync({ name: newName.trim(), sort_order: active.length });
+      await setReminders.mutateAsync({ supplementId: supplement.id, slots: newSlots });
+      setNewName("");
+      setNewSlots([emptySlot(1)]);
+      setShowAddForm(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -247,17 +293,21 @@ export function SupplementManager({ userId }: { userId: string }) {
       )}
 
       {showAddForm ? (
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-3 space-y-2 border-t border-border pt-3" noValidate>
-          <SupplementFields register={register} errors={errors} watchedLinkedKey={watchedLinkedKey} />
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          <div>
+            <Label>Naam</Label>
+            <Input placeholder="Bijv. Omega-3" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          </div>
+          <SlotsEditor slots={newSlots} onChange={setNewSlots} />
           <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={isSubmitting}>
-              Toevoegen
+            <Button type="button" size="sm" onClick={handleAdd} disabled={saving || !newName.trim()}>
+              {saving ? "Toevoegen…" : "Toevoegen"}
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddForm(false)}>
               Annuleren
             </Button>
           </div>
-        </form>
+        </div>
       ) : (
         <button
           type="button"
