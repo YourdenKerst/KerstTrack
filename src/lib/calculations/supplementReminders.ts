@@ -1,5 +1,5 @@
 import { differenceInCalendarDays } from "date-fns";
-import type { Supplement } from "@/lib/types";
+import type { Supplement, SupplementReminder } from "@/lib/types";
 
 /**
  * Of een supplement vandaag aan de beurt is, op basis van het herhaalpatroon.
@@ -37,4 +37,41 @@ export function computeReminderClockTime(intakeTime: string, minutesBefore: numb
   const hh = Math.floor(totalMinutes / 60);
   const mm = totalMinutes % 60;
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+export interface TodaysReminderEntry {
+  supplementId: string;
+  supplementName: string;
+  clockTime: string;
+  isPast: boolean;
+}
+
+/**
+ * Alle herinneringsmomenten van vandaag voor nog-niet-afgevinkte supplementen
+ * die vandaag aan de beurt zijn — inclusief al-gepasseerde momenten (met
+ * `isPast`), zodat dit ook dient als zichtbare diagnose: als hier niets
+ * "nog te gaan" staat, is er vandaag terecht (nog) geen melding gepland.
+ */
+export function computeTodaysReminders(
+  supplements: Pick<Supplement, "id" | "name" | "recurrence_type" | "recurrence_n" | "recurrence_weekday" | "intake_time">[],
+  reminders: Pick<SupplementReminder, "supplement_id" | "minutes_before">[],
+  checkedSupplementIds: Set<string>,
+  todayISO: string,
+  nowClockTime: string,
+): TodaysReminderEntry[] {
+  const entries: TodaysReminderEntry[] = [];
+  for (const supplement of supplements) {
+    if (checkedSupplementIds.has(supplement.id)) continue;
+    if (!isSupplementDueOnDate(supplement, todayISO)) continue;
+    for (const reminder of reminders.filter((r) => r.supplement_id === supplement.id)) {
+      const clockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.minutes_before);
+      entries.push({
+        supplementId: supplement.id,
+        supplementName: supplement.name,
+        clockTime,
+        isPast: clockTime <= nowClockTime,
+      });
+    }
+  }
+  return entries.sort((a, b) => a.clockTime.localeCompare(b.clockTime));
 }

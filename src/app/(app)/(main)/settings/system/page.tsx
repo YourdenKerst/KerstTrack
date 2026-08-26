@@ -5,8 +5,11 @@ import Link from "next/link";
 import { ReminderSettingsCard } from "@/components/settings/ReminderSettingsCard";
 import { ThemeToggle } from "@/components/settings/ThemeToggle";
 import { Card } from "@/components/ui";
+import { useUserId } from "@/lib/user-context";
 
 export default function SystemSettingsPage() {
+  const userId = useUserId();
+
   return (
     <div className="space-y-4 px-4 pt-6">
       <header>
@@ -21,7 +24,7 @@ export default function SystemSettingsPage() {
         <ThemeToggle />
       </Card>
 
-      <ReminderSettingsCard />
+      <ReminderSettingsCard userId={userId} />
     </div>
   );
 }

@@ -52,13 +52,50 @@ create table if not exists public.food_items (
   -- Hoeveel gram de bovenstaande waarden vertegenwoordigen — nodig om dit item
   -- correct te kunnen herschalen als receptingrediënt (zie recipe_ingredients).
   reference_grams numeric(7,1) not null default 100,
+  -- Alleen favorieten worden getoond bij het zoeken/loggen — een product
+  -- rechtstreeks loggen (zonder op het hartje te tikken) slaat niets hier op.
+  is_favorite boolean not null default true,
   created_at timestamptz not null default now()
 );
 create index if not exists food_items_user_idx on public.food_items(user_id);
 create index if not exists food_items_barcode_idx on public.food_items(user_id, barcode) where barcode is not null;
 
 -- =========================================================
--- 4. food_logs — daadwerkelijke logs per dag (macro's gedenormaliseerd gekopieerd)
+-- 4. recipes — eigen samengestelde maaltijden (bv. "cake") van meerdere ingrediënten
+-- =========================================================
+create table if not exists public.recipes (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  image_url text,
+  created_at timestamptz not null default now()
+);
+create index if not exists recipes_user_idx on public.recipes(user_id);
+
+-- =========================================================
+-- 5. recipe_ingredients — ingrediënten van een recept, per 100g gedenormaliseerd
+-- (net als food_logs t.o.v. food_items) zodat een latere wijziging aan het
+-- oorspronkelijke item de receptgeschiedenis niet stilletjes verandert.
+-- =========================================================
+create table if not exists public.recipe_ingredients (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  recipe_id uuid not null references public.recipes(id) on delete cascade,
+  name text not null,
+  image_url text,
+  grams numeric(7,1) not null,
+  calories_kcal_per_100g numeric(7,2) not null,
+  protein_g_per_100g numeric(7,2) not null default 0,
+  carbs_g_per_100g numeric(7,2) not null default 0,
+  fat_g_per_100g numeric(7,2) not null default 0,
+  fiber_g_per_100g numeric(7,2) not null default 0,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists recipe_ingredients_recipe_idx on public.recipe_ingredients(recipe_id);
+
+-- =========================================================
+-- 6. food_logs — daadwerkelijke logs per dag (macro's gedenormaliseerd gekopieerd)
 -- =========================================================
 create table if not exists public.food_logs (
   id uuid primary key default gen_random_uuid(),
@@ -79,7 +116,7 @@ create table if not exists public.food_logs (
 create index if not exists food_logs_user_date_idx on public.food_logs(user_id, log_date);
 
 -- =========================================================
--- 5. supplements — schema-definitie (soft-delete via is_active)
+-- 7. supplements — schema-definitie (soft-delete via is_active)
 -- =========================================================
 create table if not exists public.supplements (
   id uuid primary key default gen_random_uuid(),
@@ -100,7 +137,7 @@ create table if not exists public.supplements (
 create index if not exists supplements_user_idx on public.supplements(user_id, is_active);
 
 -- =========================================================
--- 5b. supplement_reminders — tot 3 herinneringsmomenten per supplement, elk
+-- 7b. supplement_reminders — tot 3 herinneringsmomenten per supplement, elk
 -- een aantal minuten vóór intake_time (0 = op het moment zelf). Slot 1 is in
 -- de app verplicht, 2 en 3 optioneel.
 -- =========================================================
@@ -115,7 +152,7 @@ create table if not exists public.supplement_reminders (
 create index if not exists supplement_reminders_supplement_idx on public.supplement_reminders(supplement_id);
 
 -- =========================================================
--- 6. supplement_logs — dagelijkse afvink-checkoffs
+-- 8. supplement_logs — dagelijkse afvink-checkoffs
 -- =========================================================
 create table if not exists public.supplement_logs (
   id uuid primary key default gen_random_uuid(),
@@ -128,7 +165,7 @@ create table if not exists public.supplement_logs (
 create index if not exists supplement_logs_user_date_idx on public.supplement_logs(user_id, log_date);
 
 -- =========================================================
--- 7. correction_checkoffs — de 3 weekendcorrectie-taken, los van het vaste schema
+-- 9. correction_checkoffs — de 3 weekendcorrectie-taken, los van het vaste schema
 -- =========================================================
 create table if not exists public.correction_checkoffs (
   id uuid primary key default gen_random_uuid(),
@@ -141,7 +178,7 @@ create table if not exists public.correction_checkoffs (
 create index if not exists correction_checkoffs_user_date_idx on public.correction_checkoffs(user_id, log_date);
 
 -- =========================================================
--- 8. water_logs — elke toevoeging is een eigen rij, dagtotaal = som
+-- 10. water_logs — elke toevoeging is een eigen rij, dagtotaal = som
 -- =========================================================
 create table if not exists public.water_logs (
   id uuid primary key default gen_random_uuid(),
@@ -153,7 +190,7 @@ create table if not exists public.water_logs (
 create index if not exists water_logs_user_date_idx on public.water_logs(user_id, log_date);
 
 -- =========================================================
--- 9. weight_logs — 1 log per dag (upsert bij dubbel loggen)
+-- 11. weight_logs — 1 log per dag (upsert bij dubbel loggen)
 -- =========================================================
 create table if not exists public.weight_logs (
   id uuid primary key default gen_random_uuid(),
@@ -167,7 +204,7 @@ create table if not exists public.weight_logs (
 create index if not exists weight_logs_user_date_idx on public.weight_logs(user_id, log_date);
 
 -- =========================================================
--- 10. alcohol_logs — bestaan van de rij = alcohol die dag
+-- 12. alcohol_logs — bestaan van de rij = alcohol die dag
 -- =========================================================
 create table if not exists public.alcohol_logs (
   id uuid primary key default gen_random_uuid(),
@@ -177,40 +214,6 @@ create table if not exists public.alcohol_logs (
   unique (user_id, log_date)
 );
 create index if not exists alcohol_logs_user_date_idx on public.alcohol_logs(user_id, log_date);
-
--- =========================================================
--- 11. recipes — eigen samengestelde maaltijden (bv. "cake") van meerdere ingrediënten
--- =========================================================
-create table if not exists public.recipes (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  name text not null,
-  image_url text,
-  created_at timestamptz not null default now()
-);
-create index if not exists recipes_user_idx on public.recipes(user_id);
-
--- =========================================================
--- 12. recipe_ingredients — ingrediënten van een recept, per 100g gedenormaliseerd
--- (net als food_logs t.o.v. food_items) zodat een latere wijziging aan het
--- oorspronkelijke item de receptgeschiedenis niet stilletjes verandert.
--- =========================================================
-create table if not exists public.recipe_ingredients (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  recipe_id uuid not null references public.recipes(id) on delete cascade,
-  name text not null,
-  image_url text,
-  grams numeric(7,1) not null,
-  calories_kcal_per_100g numeric(7,2) not null,
-  protein_g_per_100g numeric(7,2) not null default 0,
-  carbs_g_per_100g numeric(7,2) not null default 0,
-  fat_g_per_100g numeric(7,2) not null default 0,
-  fiber_g_per_100g numeric(7,2) not null default 0,
-  sort_order integer not null default 0,
-  created_at timestamptz not null default now()
-);
-create index if not exists recipe_ingredients_recipe_idx on public.recipe_ingredients(recipe_id);
 
 -- =========================================================
 -- Row Level Security — elke tabel alleen leesbaar/schrijfbaar door de eigenaar
@@ -487,3 +490,13 @@ create policy "food_images_write" on storage.objects for insert to authenticated
 drop policy if exists "food_images_delete" on storage.objects;
 create policy "food_images_delete" on storage.objects for delete to authenticated
   using (bucket_id = 'food-images');
+
+-- =========================================================
+-- Migratie: favorieten. Loggen sloeg altijd een food_items-rij op, ook voor
+-- een eenmalig gescand/gezocht Open Food Facts-product — daardoor raakte
+-- "jouw producten" vervuild met dingen die je maar één keer had gegeten.
+-- Vanaf nu wordt een food_items-rij alleen nog aangemaakt als je op het
+-- hartje tikt; bestaande rijen (die je al zag als "jouw producten") worden
+-- hieronder als favoriet aangemerkt zodat ze niet plotseling verdwijnen.
+-- =========================================================
+alter table public.food_items add column if not exists is_favorite boolean not null default true;

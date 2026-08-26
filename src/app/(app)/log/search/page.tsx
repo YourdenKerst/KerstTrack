@@ -1,14 +1,14 @@
 "use client";
 
-import { Loader2, Search } from "lucide-react";
+import { Heart, Loader2, Search, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ScannedProductReview } from "@/components/food/ScannedProductReview";
 import { Input } from "@/components/ui";
 import { todayISO } from "@/lib/date";
-import { searchProductsByName, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
-import { useAddFoodItem, useFoodItems } from "@/lib/queries/foodItems";
-import { useLogFoodItem } from "@/lib/queries/foodLogs";
+import { scaleProductToGrams, searchProductsByName, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
+import { useAddFoodItem, useDeleteFoodItem, useFoodItems, useSetFoodItemFavorite } from "@/lib/queries/foodItems";
+import { useAddFoodLog, useLogFoodItem } from "@/lib/queries/foodLogs";
 import type { FoodItem } from "@/lib/types";
 import { useUserId } from "@/lib/user-context";
 
@@ -40,7 +40,10 @@ function SearchFoodPageContent() {
   const dateISO = searchParams.get("date") ?? todayISO();
   const { data: items } = useFoodItems(userId);
   const logItem = useLogFoodItem(userId);
+  const addFoodLog = useAddFoodLog(userId);
   const addFoodItem = useAddFoodItem(userId);
+  const setFavorite = useSetFoodItemFavorite(userId);
+  const deleteFoodItem = useDeleteFoodItem(userId);
 
   const [query, setQuery] = useState("");
   const [offResults, setOffResults] = useState<OpenFoodFactsProduct[]>([]);
@@ -51,7 +54,8 @@ function SearchFoodPageContent() {
   const [loggedKey, setLoggedKey] = useState<string | null>(null);
   const [logError, setLogError] = useState(false);
 
-  const localMatches = (items ?? []).filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const favorites = (items ?? []).filter((item) => item.is_favorite);
+  const localMatches = favorites.filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase()));
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -62,14 +66,51 @@ function SearchFoodPageContent() {
       setOffLoading(true);
       try {
         const results = await searchProductsByName(trimmed);
-        const localBarcodes = new Set((items ?? []).map((i) => i.barcode).filter(Boolean));
-        setOffResults(results.filter((r) => !localBarcodes.has(r.barcode)));
+        setOffResults(results);
       } finally {
         setOffLoading(false);
       }
     }, 400);
     return () => window.clearTimeout(timeout);
-  }, [query, items]);
+  }, [query]);
+
+  // Verberg een OFF-resultaat alleen als het al favoriet is (dan staat het al
+  // hierboven bij Favorieten) — een bestaande, niet-favoriete rij (bv. eerder
+  // ontfavoriet) mag hier blijven staan zodat hij opnieuw gefavoriet kan worden.
+  const favoritedBarcodes = new Set(favorites.map((item) => item.barcode).filter(Boolean));
+  const visibleOffResults = offResults.filter((r) => !favoritedBarcodes.has(r.barcode));
+
+  function findLocalByBarcode(barcode: string): FoodItem | null {
+    if (!barcode) return null;
+    return (items ?? []).find((i) => i.barcode === barcode) ?? null;
+  }
+
+  async function toggleFavorite(product: OpenFoodFactsProduct, existingItemId: string | null) {
+    const existing = existingItemId ? (items ?? []).find((i) => i.id === existingItemId) : findLocalByBarcode(product.barcode);
+    if (existing) {
+      await setFavorite.mutateAsync({ id: existing.id, is_favorite: !existing.is_favorite });
+      return existing.id;
+    }
+    const created = await addFoodItem.mutateAsync({
+      name: product.name ?? "Product",
+      barcode: product.barcode || null,
+      image_url: product.imageUrl,
+      calories_kcal: product.caloriesKcal ?? 0,
+      protein_g: product.proteinG ?? 0,
+      carbs_g: product.carbsG ?? 0,
+      fat_g: product.fatG ?? 0,
+      fiber_g: product.fiberG ?? 0,
+      reference_grams: 100,
+      is_favorite: true,
+    });
+    return created.id;
+  }
+
+  async function handleToggleFavoriteInReview() {
+    if (!reviewing) return;
+    const id = await toggleFavorite(reviewing.product, reviewing.existingItemId);
+    setReviewing({ ...reviewing, existingItemId: id });
+  }
 
   async function handleConfirm(grams: number) {
     if (!reviewing) return;
@@ -77,22 +118,33 @@ function SearchFoodPageContent() {
     setLogError(false);
 
     try {
-      if (existingItemId) {
-        const item = (items ?? []).find((i) => i.id === existingItemId);
-        if (item) await logItem.mutateAsync({ item, logDate: dateISO, grams });
-      } else {
-        const item = await addFoodItem.mutateAsync({
-          name: product.name ?? "Product",
-          barcode: product.barcode || null,
-          image_url: product.imageUrl,
-          calories_kcal: product.caloriesKcal ?? 0,
-          protein_g: product.proteinG ?? 0,
-          carbs_g: product.carbsG ?? 0,
-          fat_g: product.fatG ?? 0,
-          fiber_g: product.fiberG ?? 0,
-          reference_grams: 100,
-        });
+      const item = existingItemId ? (items ?? []).find((i) => i.id === existingItemId) : null;
+      if (item) {
         await logItem.mutateAsync({ item, logDate: dateISO, grams });
+      } else {
+        const scaled = scaleProductToGrams(
+          {
+            caloriesKcal: product.caloriesKcal ?? 0,
+            proteinG: product.proteinG ?? 0,
+            carbsG: product.carbsG ?? 0,
+            fatG: product.fatG ?? 0,
+            fiberG: product.fiberG ?? 0,
+          },
+          grams,
+        );
+        await addFoodLog.mutateAsync({
+          food_item_id: null,
+          recipe_id: null,
+          name: product.name ?? "Product",
+          image_url: product.imageUrl,
+          ingredient_count: null,
+          calories_kcal: scaled.caloriesKcal,
+          protein_g: scaled.proteinG,
+          carbs_g: scaled.carbsG,
+          fat_g: scaled.fatG,
+          fiber_g: scaled.fiberG,
+          log_date: dateISO,
+        });
       }
 
       setLoggedKey(existingItemId ?? product.barcode);
@@ -104,10 +156,15 @@ function SearchFoodPageContent() {
   }
 
   if (reviewing) {
+    const isFavorited = reviewing.existingItemId
+      ? Boolean((items ?? []).find((i) => i.id === reviewing.existingItemId)?.is_favorite)
+      : false;
     return (
       <div className="space-y-2">
         <ScannedProductReview
           product={reviewing.product}
+          isFavorited={isFavorited}
+          onToggleFavorite={handleToggleFavoriteInReview}
           onCancel={() => setReviewing(null)}
           onConfirm={handleConfirm}
         />
@@ -133,18 +190,16 @@ function SearchFoodPageContent() {
         />
       </div>
 
-      {!items || items.length === 0 || localMatches.length === 0 ? null : (
+      {favorites.length === 0 || localMatches.length === 0 ? null : (
         <div>
-          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Jouw producten
-          </h2>
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Favorieten</h2>
           <ul className="divide-y divide-border">
             {localMatches.map((item) => (
-              <li key={item.id}>
+              <li key={item.id} className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setReviewing({ product: toOffShape(item), existingItemId: item.id })}
-                  className="flex w-full items-center gap-3 py-2.5 text-left transition-colors active:bg-surface-muted"
+                  className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left transition-colors active:bg-surface-muted"
                 >
                   {item.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element -- eigen/OFF-afbeelding, geen build-time optimalisatie nodig
@@ -161,6 +216,24 @@ function SearchFoodPageContent() {
                   </span>
                   {loggedKey === item.id && <span className="shrink-0 text-xs font-medium text-success">Gelogd!</span>}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setFavorite.mutate({ id: item.id, is_favorite: false })}
+                  aria-label="Verwijder uit favorieten"
+                  className="shrink-0 rounded-full p-2 text-muted-foreground active:bg-surface-muted"
+                >
+                  <Heart size={16} className="fill-danger text-danger" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`"${item.name}" definitief verwijderen?`)) deleteFoodItem.mutate(item.id);
+                  }}
+                  aria-label="Definitief verwijderen"
+                  className="shrink-0 rounded-full p-2 text-muted-foreground active:bg-surface-muted active:text-danger"
+                >
+                  <Trash2 size={16} />
+                </button>
               </li>
             ))}
           </ul>
@@ -173,43 +246,57 @@ function SearchFoodPageContent() {
             Open Food Facts
             {offLoading && <Loader2 size={12} className="animate-spin" />}
           </h2>
-          {offResults.length === 0 && !offLoading && (
+          {visibleOffResults.length === 0 && !offLoading && (
             <p className="py-2 text-sm text-muted-foreground">Niets gevonden.</p>
           )}
           <ul className="divide-y divide-border">
-            {offResults.map((product) => (
-              <li key={product.barcode}>
-                <button
-                  type="button"
-                  onClick={() => setReviewing({ product, existingItemId: null })}
-                  className="flex w-full items-center gap-3 py-2.5 text-left transition-colors active:bg-surface-muted"
-                >
-                  {product.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- extern OFF-domein, geen build-time optimalisatie nodig
-                    <img src={product.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover" />
-                  ) : (
-                    <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-muted" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {product.name ?? "Onbekend product"}
+            {visibleOffResults.map((product) => {
+              const localMatch = findLocalByBarcode(product.barcode);
+              return (
+                <li key={product.barcode} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setReviewing({ product, existingItemId: localMatch?.id ?? null })}
+                    className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left transition-colors active:bg-surface-muted"
+                  >
+                    {product.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- extern OFF-domein, geen build-time optimalisatie nodig
+                      <img src={product.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover" />
+                    ) : (
+                      <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-muted" />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {product.name ?? "Onbekend product"}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        {Math.round(product.caloriesKcal ?? 0)} kcal/100g
+                      </span>
                     </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {Math.round(product.caloriesKcal ?? 0)} kcal/100g
-                    </span>
-                  </span>
-                  {loggedKey === product.barcode && <span className="shrink-0 text-xs font-medium text-success">Gelogd!</span>}
-                </button>
-              </li>
-            ))}
+                    {loggedKey === product.barcode && (
+                      <span className="shrink-0 text-xs font-medium text-success">Gelogd!</span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleFavorite(product, localMatch?.id ?? null)}
+                    aria-label="Favoriet maken"
+                    className="shrink-0 rounded-full p-2 text-muted-foreground active:bg-surface-muted"
+                  >
+                    <Heart size={16} />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
 
       {!items && <p className="py-6 text-center text-sm text-muted-foreground">Laden…</p>}
-      {items && items.length === 0 && query.trim().length < 2 && (
+      {items && favorites.length === 0 && query.trim().length < 2 && (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          Typ een naam om te zoeken — zowel in je eigen producten als in Open Food Facts.
+          Typ een naam om te zoeken — zowel in je favorieten als in Open Food Facts. Tik op het hartje om iets te
+          bewaren als favoriet.
         </p>
       )}
     </div>

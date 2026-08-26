@@ -3,6 +3,8 @@
 import { Bell } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { Button, Card, Toggle } from "@/components/ui";
+import { computeTodaysReminders } from "@/lib/calculations/supplementReminders";
+import { todayISO } from "@/lib/date";
 import {
   getNotificationPermission,
   getReminderSettings,
@@ -12,14 +14,33 @@ import {
   setReminderSettings,
   subscribeToReminderSettings,
 } from "@/lib/notifications";
+import { useAllSupplementReminders } from "@/lib/queries/supplementReminders";
+import { useSupplementLogsForDate } from "@/lib/queries/supplementLogs";
+import { useSupplements } from "@/lib/queries/supplements";
 
-export function ReminderSettingsCard() {
+export function ReminderSettingsCard({ userId }: { userId: string }) {
   const settings = useSyncExternalStore(subscribeToReminderSettings, getReminderSettings, getServerReminderSettings);
   const permission = useSyncExternalStore(
     subscribeToReminderSettings,
     getNotificationPermission,
     getServerNotificationPermission,
   );
+
+  const today = todayISO();
+  const { data: supplements } = useSupplements(userId);
+  const { data: reminders } = useAllSupplementReminders(userId);
+  const { data: todayLogs } = useSupplementLogsForDate(userId, today);
+
+  const todaysReminders =
+    supplements && reminders
+      ? computeTodaysReminders(
+          supplements,
+          reminders,
+          new Set(todayLogs?.map((log) => log.supplement_id)),
+          today,
+          `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`,
+        )
+      : [];
 
   async function handleToggle(enabled: boolean) {
     if (enabled && typeof Notification !== "undefined" && Notification.permission === "default") {
@@ -65,6 +86,29 @@ export function ReminderSettingsCard() {
         <Button variant="secondary" size="sm" onClick={sendTest}>
           Stuur testmelding
         </Button>
+      )}
+
+      {settings.enabled && permission === "granted" && (
+        <div className="mt-3 rounded-lg bg-surface-muted p-3">
+          <p className="mb-1.5 text-xs font-medium text-foreground">Vandaag ingepland</p>
+          {todaysReminders.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Geen — geen supplement vandaag aan de beurt met een openstaande herinnering, of alles is al afgevinkt.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {todaysReminders.map((r, i) => (
+                <li
+                  key={`${r.supplementId}-${i}`}
+                  className={`text-xs ${r.isPast ? "text-muted-foreground line-through" : "text-foreground"}`}
+                >
+                  {r.clockTime} — {r.supplementName}
+                  {r.isPast && " (tijdstip al voorbij, gaat vandaag niet meer af)"}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       <p className="mt-3 text-xs text-muted-foreground">

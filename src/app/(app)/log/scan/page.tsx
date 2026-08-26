@@ -6,9 +6,9 @@ import { Suspense, useState } from "react";
 import { BarcodeScanner } from "@/components/food/BarcodeScanner";
 import { ScannedProductReview } from "@/components/food/ScannedProductReview";
 import { todayISO } from "@/lib/date";
-import { lookupBarcodeProduct, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
-import { useAddFoodItem, findFoodItemByBarcode } from "@/lib/queries/foodItems";
-import { useLogFoodItem } from "@/lib/queries/foodLogs";
+import { lookupBarcodeProduct, scaleProductToGrams, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
+import { useAddFoodItem, useFoodItems, useSetFoodItemFavorite, findFoodItemByBarcode } from "@/lib/queries/foodItems";
+import { useAddFoodLog, useLogFoodItem } from "@/lib/queries/foodLogs";
 import { useUserId } from "@/lib/user-context";
 
 type ScanStatus = "idle" | "looking-up" | "not-found" | "error" | "log-error" | "logged";
@@ -26,18 +26,23 @@ function ScanFoodPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const dateISO = searchParams.get("date") ?? todayISO();
+  const { data: items } = useFoodItems(userId);
   const logFoodItem = useLogFoodItem(userId);
+  const addFoodLog = useAddFoodLog(userId);
   const addFoodItem = useAddFoodItem(userId);
+  const setFavorite = useSetFoodItemFavorite(userId);
 
   const [scannerOpen, setScannerOpen] = useState(true);
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [scannedProduct, setScannedProduct] = useState<OpenFoodFactsProduct | null>(null);
+  const [savedItemId, setSavedItemId] = useState<string | null>(null);
   const [notFoundBarcode, setNotFoundBarcode] = useState<string | null>(null);
 
   async function handleDetected(barcode: string) {
     setScannerOpen(false);
     setStatus("looking-up");
     setScannedProduct(null);
+    setSavedItemId(null);
     setNotFoundBarcode(null);
 
     try {
@@ -61,21 +66,59 @@ function ScanFoodPageContent() {
     }
   }
 
+  async function handleToggleFavorite() {
+    if (!scannedProduct) return;
+    const existing = savedItemId ? (items ?? []).find((i) => i.id === savedItemId) : null;
+    if (existing) {
+      await setFavorite.mutateAsync({ id: existing.id, is_favorite: !existing.is_favorite });
+      return;
+    }
+    const created = await addFoodItem.mutateAsync({
+      name: scannedProduct.name ?? "Gescand product",
+      barcode: scannedProduct.barcode,
+      image_url: scannedProduct.imageUrl,
+      calories_kcal: scannedProduct.caloriesKcal ?? 0,
+      protein_g: scannedProduct.proteinG ?? 0,
+      carbs_g: scannedProduct.carbsG ?? 0,
+      fat_g: scannedProduct.fatG ?? 0,
+      fiber_g: scannedProduct.fiberG ?? 0,
+      reference_grams: 100,
+      is_favorite: true,
+    });
+    setSavedItemId(created.id);
+  }
+
   async function handleConfirm(grams: number) {
     if (!scannedProduct) return;
     try {
-      const item = await addFoodItem.mutateAsync({
-        name: scannedProduct.name ?? "Gescand product",
-        barcode: scannedProduct.barcode,
-        image_url: scannedProduct.imageUrl,
-        calories_kcal: scannedProduct.caloriesKcal ?? 0,
-        protein_g: scannedProduct.proteinG ?? 0,
-        carbs_g: scannedProduct.carbsG ?? 0,
-        fat_g: scannedProduct.fatG ?? 0,
-        fiber_g: scannedProduct.fiberG ?? 0,
-        reference_grams: 100,
-      });
-      await logFoodItem.mutateAsync({ item, logDate: dateISO, grams });
+      const item = savedItemId ? (items ?? []).find((i) => i.id === savedItemId) : null;
+      if (item) {
+        await logFoodItem.mutateAsync({ item, logDate: dateISO, grams });
+      } else {
+        const scaled = scaleProductToGrams(
+          {
+            caloriesKcal: scannedProduct.caloriesKcal ?? 0,
+            proteinG: scannedProduct.proteinG ?? 0,
+            carbsG: scannedProduct.carbsG ?? 0,
+            fatG: scannedProduct.fatG ?? 0,
+            fiberG: scannedProduct.fiberG ?? 0,
+          },
+          grams,
+        );
+        await addFoodLog.mutateAsync({
+          food_item_id: null,
+          recipe_id: null,
+          name: scannedProduct.name ?? "Gescand product",
+          image_url: scannedProduct.imageUrl,
+          ingredient_count: null,
+          calories_kcal: scaled.caloriesKcal,
+          protein_g: scaled.proteinG,
+          carbs_g: scaled.carbsG,
+          fat_g: scaled.fatG,
+          fiber_g: scaled.fiberG,
+          log_date: dateISO,
+        });
+      }
       setScannedProduct(null);
       setStatus("logged");
     } catch {
@@ -85,9 +128,12 @@ function ScanFoodPageContent() {
 
   function reset() {
     setScannedProduct(null);
+    setSavedItemId(null);
     setStatus("idle");
     setScannerOpen(true);
   }
+
+  const isFavorited = savedItemId ? Boolean((items ?? []).find((i) => i.id === savedItemId)?.is_favorite) : false;
 
   return (
     <div className="space-y-4">
@@ -151,7 +197,13 @@ function ScanFoodPageContent() {
       {scannerOpen && <BarcodeScanner onDetected={handleDetected} onClose={() => router.push("/")} />}
 
       {scannedProduct && (
-        <ScannedProductReview product={scannedProduct} onCancel={reset} onConfirm={handleConfirm} />
+        <ScannedProductReview
+          product={scannedProduct}
+          isFavorited={isFavorited}
+          onToggleFavorite={handleToggleFavorite}
+          onCancel={reset}
+          onConfirm={handleConfirm}
+        />
       )}
     </div>
   );

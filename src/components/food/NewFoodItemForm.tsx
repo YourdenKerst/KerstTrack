@@ -58,6 +58,7 @@ export function NewFoodItemForm({
       barcode: barcode ?? null,
       image_url: imageUrl,
       reference_grams: 100,
+      is_favorite: true,
     });
     reset(EMPTY_NEW_FOOD_ITEM_VALUES);
     setImageUrl(null);

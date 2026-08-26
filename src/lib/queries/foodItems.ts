@@ -58,6 +58,20 @@ export function useAddFoodItem(userId: string) {
   });
 }
 
+export function useSetFoodItemFavorite(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, is_favorite }: { id: string; is_favorite: boolean }) => {
+      const supabase = createClient();
+      const { error } = await supabase.from("food_items").update({ is_favorite }).eq("id", id).eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: foodItemsKey(userId) });
+    },
+  });
+}
+
 export function useDeleteFoodItem(userId: string) {
   const queryClient = useQueryClient();
   return useMutation({

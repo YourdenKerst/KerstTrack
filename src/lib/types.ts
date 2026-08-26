@@ -100,6 +100,7 @@ export type Database = {
           fat_g: number;
           fiber_g: number;
           reference_grams: number;
+          is_favorite: boolean;
           created_at: string;
         };
         Insert: {
@@ -114,6 +115,7 @@ export type Database = {
           fat_g?: number;
           fiber_g?: number;
           reference_grams?: number;
+          is_favorite?: boolean;
           created_at?: string;
         };
         Update: {
@@ -128,6 +130,7 @@ export type Database = {
           fat_g?: number;
           fiber_g?: number;
           reference_grams?: number;
+          is_favorite?: boolean;
           created_at?: string;
         };
         Relationships: [];

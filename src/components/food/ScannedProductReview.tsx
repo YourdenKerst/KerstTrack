@@ -1,15 +1,20 @@
 "use client";
 
+import { Heart } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { scaleProductToGrams, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
 
 export function ScannedProductReview({
   product,
+  isFavorited,
+  onToggleFavorite,
   onConfirm,
   onCancel,
 }: {
   product: OpenFoodFactsProduct;
+  isFavorited: boolean;
+  onToggleFavorite: () => void;
   onConfirm: (grams: number) => void;
   onCancel: () => void;
 }) {
@@ -36,10 +41,18 @@ export function ScannedProductReview({
             className="h-14 w-14 shrink-0 rounded-xl border border-border object-cover"
           />
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-foreground">{product.name ?? "Gescand product"}</h2>
           <p className="text-xs text-muted-foreground">Gevonden via Open Food Facts — pas de hoeveelheid aan.</p>
         </div>
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          aria-label={isFavorited ? "Verwijder uit favorieten" : "Favoriet maken"}
+          className="shrink-0 rounded-full p-2 text-muted-foreground transition-colors active:bg-surface-muted"
+        >
+          <Heart size={20} className={isFavorited ? "fill-danger text-danger" : ""} />
+        </button>
       </div>
 
       <div>
