@@ -46,6 +46,9 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline\\.html|.*\\.(?:svg|png|jpg|jpeg|webp|ico|json|xml|webmanifest)$).*)",
+    // API routes regelen hun eigen auth (sessie-cookie via createClient(), of
+    // een eigen bearer-token zoals /api/push/send-due voor de cron-aanroep) —
+    // een redirect naar /login zou zo'n server-naar-server call altijd breken.
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline\\.html|api/|.*\\.(?:svg|png|jpg|jpeg|webp|ico|json|xml|webmanifest)$).*)",
   ],
 };
