@@ -24,10 +24,7 @@ export default function ProfileSettingsPage() {
         <ProfileForm userId={userId} />
       </Card>
 
-      <Card>
-        <h2 className="mb-3 text-sm font-semibold text-foreground">Voedingsschema</h2>
-        <TargetsForm userId={userId} />
-      </Card>
+      <TargetsForm userId={userId} />
     </div>
   );
 }

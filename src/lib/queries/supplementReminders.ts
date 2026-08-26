@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import type { RecurrenceType, SupplementReminder } from "@/lib/types";
+import type { SupplementReminder } from "@/lib/types";
 
 export function supplementRemindersKey(supplementId: string) {
   return ["supplement_reminders", supplementId] as const;
@@ -43,10 +43,7 @@ export function useAllSupplementReminders(userId: string) {
 
 export interface ReminderSlotInput {
   slot: number;
-  reminder_time: string;
-  recurrence_type: RecurrenceType;
-  recurrence_n: number | null;
-  recurrence_weekday: number | null;
+  minutes_before: number;
 }
 
 /** Vervangt in één keer alle meldingsmomenten van een supplement (max. 3 slots). */

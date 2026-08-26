@@ -85,6 +85,14 @@ create table if not exists public.supplements (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  -- Tijdstip van inname + herhaling gelden voor het hele supplement (niet per
+  -- herinnering — zie supplement_reminders hieronder voor die offsets).
+  intake_time time not null default '09:00',
+  recurrence_type text not null default 'daily' check (recurrence_type in ('daily', 'every_n_days', 'weekly')),
+  -- Alleen relevant bij recurrence_type = 'every_n_days' (2/3/4).
+  recurrence_n smallint,
+  -- Alleen relevant bij recurrence_type = 'weekly' (0 = maandag ... 6 = zondag).
+  recurrence_weekday smallint,
   sort_order integer not null default 0,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
@@ -92,21 +100,16 @@ create table if not exists public.supplements (
 create index if not exists supplements_user_idx on public.supplements(user_id, is_active);
 
 -- =========================================================
--- 5b. supplement_reminders — tot 3 meldingsmomenten per supplement.
--- Slot 1 is in de app verplicht, 2 en 3 optioneel. Elk moment heeft een eigen
--- tijdstip en herhaalpatroon (elke dag / elke N dagen / een vaste weekdag).
+-- 5b. supplement_reminders — tot 3 herinneringsmomenten per supplement, elk
+-- een aantal minuten vóór intake_time (0 = op het moment zelf). Slot 1 is in
+-- de app verplicht, 2 en 3 optioneel.
 -- =========================================================
 create table if not exists public.supplement_reminders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   supplement_id uuid not null references public.supplements(id) on delete cascade,
   slot smallint not null check (slot in (1, 2, 3)),
-  reminder_time time not null,
-  recurrence_type text not null check (recurrence_type in ('daily', 'every_n_days', 'weekly')),
-  -- Alleen relevant bij recurrence_type = 'every_n_days' (2/3/4).
-  recurrence_n smallint,
-  -- Alleen relevant bij recurrence_type = 'weekly' (0 = maandag ... 6 = zondag).
-  recurrence_weekday smallint,
+  minutes_before integer not null default 0 check (minutes_before >= 0),
   unique (supplement_id, slot)
 );
 create index if not exists supplement_reminders_supplement_idx on public.supplement_reminders(supplement_id);
@@ -432,34 +435,24 @@ alter table public.supplements drop column if exists linked_nutrient_key;
 alter table public.supplements drop column if exists linked_nutrient_amount;
 
 -- =========================================================
--- Migratie: supplementen — dosis en tijdstip-tekst eruit, vervangen door tot
--- 3 losse meldingsmomenten (zie supplement_reminders hierboven). Bestaand
--- enkelvoudig reminder_time wordt (indien aanwezig) omgezet naar slot 1.
+-- Migratie: supplementen — tijdstip van inname + herhaling horen bij het
+-- supplement zelf (niet meer per herinnering); supplement_reminders is nu
+-- alleen nog "x minuten vóór intake_time" (zie basistabellen hierboven).
 -- =========================================================
-alter table public.supplements add column if not exists reminder_time time;
+alter table public.supplements add column if not exists intake_time time not null default '09:00';
+alter table public.supplements add column if not exists recurrence_type text not null default 'daily';
+alter table public.supplements add column if not exists recurrence_n smallint;
+alter table public.supplements add column if not exists recurrence_weekday smallint;
+alter table public.supplements drop constraint if exists supplements_recurrence_type_check;
+alter table public.supplements add constraint supplements_recurrence_type_check check (recurrence_type in ('daily', 'every_n_days', 'weekly'));
 
-create table if not exists public.supplement_reminders (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  supplement_id uuid not null references public.supplements(id) on delete cascade,
-  slot smallint not null check (slot in (1, 2, 3)),
-  reminder_time time not null,
-  recurrence_type text not null check (recurrence_type in ('daily', 'every_n_days', 'weekly')),
-  recurrence_n smallint,
-  recurrence_weekday smallint,
-  unique (supplement_id, slot)
-);
-create index if not exists supplement_reminders_supplement_idx on public.supplement_reminders(supplement_id);
-alter table public.supplement_reminders enable row level security;
-drop policy if exists "supplement_reminders_self" on public.supplement_reminders;
-create policy "supplement_reminders_self" on public.supplement_reminders for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-insert into public.supplement_reminders (user_id, supplement_id, slot, reminder_time, recurrence_type)
-select user_id, id, 1, coalesce(reminder_time, '09:00'::time), 'daily'
-from public.supplements
-where not exists (
-  select 1 from public.supplement_reminders where supplement_reminders.supplement_id = supplements.id
-);
+alter table public.supplement_reminders drop column if exists reminder_time;
+alter table public.supplement_reminders drop column if exists recurrence_type;
+alter table public.supplement_reminders drop column if exists recurrence_n;
+alter table public.supplement_reminders drop column if exists recurrence_weekday;
+alter table public.supplement_reminders add column if not exists minutes_before integer not null default 0;
+alter table public.supplement_reminders drop constraint if exists supplement_reminders_minutes_before_check;
+alter table public.supplement_reminders add constraint supplement_reminders_minutes_before_check check (minutes_before >= 0);
 
 alter table public.supplements drop column if exists dose_label;
 alter table public.supplements drop column if exists timing_label;

@@ -52,20 +52,27 @@ export async function lookupBarcodeProduct(barcode: string): Promise<OpenFoodFac
   return toProduct(barcode, data.product);
 }
 
-/** Zoekt producten op naam via search-a-licious. Geeft maximaal `limit` resultaten terug. */
+/**
+ * Zoekt producten op naam. Loopt via onze eigen /api/off-search-route in
+ * plaats van rechtstreeks search.openfoodfacts.org aan te roepen — die
+ * stuurt geen Access-Control-Allow-Origin voor externe domeinen, dus een
+ * rechtstreekse browser-fetch wordt door CORS geblokkeerd (bevestigd via
+ * curl: wel access-control-allow-credentials, geen -allow-origin).
+ */
 export async function searchProductsByName(query: string, limit = 15): Promise<OpenFoodFactsProduct[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
-  const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(trimmed)}&page_size=${limit}&fields=code,product_name,product_name_nl,generic_name,nutriments,image_front_small_url,image_front_url,image_url`;
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-  if (!response.ok) return [];
+  try {
+    const response = await fetch(`/api/off-search?q=${encodeURIComponent(trimmed)}&limit=${limit}`);
+    if (!response.ok) return [];
 
-  const data = await response.json();
-  const hits = (data.hits ?? []) as Record<string, unknown>[];
-  return hits
-    .filter((hit) => typeof hit.code === "string")
-    .map((hit) => toProduct(hit.code as string, hit));
+    const data = await response.json();
+    const hits = (data.hits ?? []) as Record<string, unknown>[];
+    return hits.filter((hit) => typeof hit.code === "string").map((hit) => toProduct(hit.code as string, hit));
+  } catch {
+    return [];
+  }
 }
 
 /** Schaalt "per 100g"-waarden naar een opgegeven gewicht in gram. */

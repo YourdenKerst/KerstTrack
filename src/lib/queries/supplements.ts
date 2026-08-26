@@ -42,7 +42,10 @@ export function useAllSupplements(userId: string) {
   });
 }
 
-export type NewSupplement = Pick<Supplement, "name" | "sort_order">;
+export type NewSupplement = Pick<
+  Supplement,
+  "name" | "intake_time" | "recurrence_type" | "recurrence_n" | "recurrence_weekday" | "sort_order"
+>;
 
 export function useAddSupplement(userId: string) {
   const queryClient = useQueryClient();

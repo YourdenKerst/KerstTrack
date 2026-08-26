@@ -1,11 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Button, FieldError, Input, Label, Select } from "@/components/ui";
+import { Button, Card, FieldError, Input, Label, Select } from "@/components/ui";
 import {
+  ACTIVITY_LEVELS,
   calculateAge,
   calculateRecommendedTargets,
   GOAL_PLANS,
@@ -38,22 +39,38 @@ interface CompleteProfile extends Profile {
   birth_date: string;
 }
 
-function GoalPaceEditor({
+interface NutritionSchedule {
+  activityLevel: ActivityLevel | null;
+  goal: GoalPlan | null;
+  pace: number | null;
+}
+
+/**
+ * Voedingsschema-blok + de trigger voor "Dagelijkse doelen" hieronder. Mount
+ * alleen zodra het profiel compleet is, zodat activityLevel/goal/pace veilig
+ * lazy vanuit `profile` geïnitialiseerd kunnen worden (geen effect nodig).
+ */
+function NutritionScheduleEditor({
   profile,
   onCalculate,
+  children,
 }: {
   profile: CompleteProfile;
-  onCalculate: (goal: GoalPlan, pace: number | null) => Promise<void>;
+  onCalculate: (schedule: NutritionSchedule) => Promise<void>;
+  children: ReactNode;
 }) {
-  const [goal, setGoal] = useState<GoalPlan | null>((profile.goal as GoalPlan | null) ?? null);
-  const [pace, setPace] = useState<number | null>(profile.goal_pace_kg_per_week);
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel | null>(
+    () => (profile.activity_level as ActivityLevel | null) ?? null,
+  );
+  const [goal, setGoal] = useState<GoalPlan | null>(() => (profile.goal as GoalPlan | null) ?? null);
+  const [pace, setPace] = useState<number | null>(() => profile.goal_pace_kg_per_week);
   const [calculating, setCalculating] = useState(false);
 
   const goalPlan = GOAL_PLANS.find((g) => g.key === goal);
   const inDanger = Boolean(goalPlan?.paceRange && pace != null && pace > goalPlan.paceRange.dangerAbove);
 
-  function handleGoalChange(value: string) {
-    const nextGoal = (value || null) as GoalPlan | null;
+  function handleGoalChange(raw: string) {
+    const nextGoal = (raw || null) as GoalPlan | null;
     setGoal(nextGoal);
     const nextPlan = GOAL_PLANS.find((g) => g.key === nextGoal);
     setPace(nextPlan?.paceRange?.default ?? null);
@@ -63,67 +80,94 @@ function GoalPaceEditor({
     if (!goal) return;
     setCalculating(true);
     try {
-      await onCalculate(goal, pace);
+      await onCalculate({ activityLevel, goal, pace });
     } finally {
       setCalculating(false);
     }
   }
 
   return (
-    <div className="space-y-3">
-      <Select value={goal ?? ""} onChange={(e) => handleGoalChange(e.target.value)}>
-        <option value="">Niet ingevuld</option>
-        {GOAL_PLANS.map((plan) => (
-          <option key={plan.key} value={plan.key}>
-            {plan.label}
-          </option>
-        ))}
-      </Select>
-
-      {goalPlan?.paceRange && (
-        <div>
-          <Label>
-            Tempo: {(pace ?? goalPlan.paceRange.default).toFixed(2)} kg per week{" "}
-            {goalPlan.direction < 0 ? "verliezen" : "erbij"}
-          </Label>
-          <input
-            type="range"
-            min={goalPlan.paceRange.min}
-            max={goalPlan.paceRange.max}
-            step={goalPlan.paceRange.step}
-            value={pace ?? goalPlan.paceRange.default}
-            onChange={(e) => setPace(Number(e.target.value))}
-            className="h-2 w-full appearance-none rounded-full accent-foreground"
-            style={{
-              background: `linear-gradient(to right, var(--success-cell) 0%, var(--success-cell) ${
-                ((goalPlan.paceRange.dangerAbove - goalPlan.paceRange.min) /
-                  (goalPlan.paceRange.max - goalPlan.paceRange.min)) *
-                100
-              }%, var(--danger-cell) ${
-                ((goalPlan.paceRange.dangerAbove - goalPlan.paceRange.min) /
-                  (goalPlan.paceRange.max - goalPlan.paceRange.min)) *
-                100
-              }%, var(--danger-cell) 100%)`,
-            }}
-          />
-          <div className="flex justify-between text-[11px] text-muted-foreground">
-            <span>Rustig ({goalPlan.paceRange.min} kg/week)</span>
-            <span>Snel ({goalPlan.paceRange.max} kg/week)</span>
+    <>
+      <Card>
+        <h2 className="mb-3 text-sm font-semibold text-foreground">Voedingsschema</h2>
+        <div className="space-y-3">
+          <div>
+            <Label>Activiteitsniveau</Label>
+            <Select value={activityLevel ?? ""} onChange={(e) => setActivityLevel((e.target.value || null) as ActivityLevel | null)}>
+              <option value="">Niet ingevuld</option>
+              {ACTIVITY_LEVELS.map((level) => (
+                <option key={level.key} value={level.key}>
+                  {level.label}
+                </option>
+              ))}
+            </Select>
           </div>
-          {inDanger && (
-            <p className="mt-2 rounded-lg bg-warning-bg px-3 py-2 text-xs text-foreground">
-              Dit tempo is agressiever dan doorgaans wordt aangeraden en kan gepaard gaan met meer spierverlies,
-              vermoeidheid of een groter risico op terugval. Overweeg een rustiger tempo, of overleg dit met een
-              arts of diëtist.
-            </p>
+
+          <div>
+            <Label>Doel</Label>
+            <Select value={goal ?? ""} onChange={(e) => handleGoalChange(e.target.value)}>
+              <option value="">Niet ingevuld</option>
+              {GOAL_PLANS.map((plan) => (
+                <option key={plan.key} value={plan.key}>
+                  {plan.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {goalPlan?.paceRange && (
+            <div>
+              <Label>
+                Tempo: {(pace ?? goalPlan.paceRange.default).toFixed(2)} kg per week{" "}
+                {goalPlan.direction < 0 ? "verliezen" : "erbij"}
+              </Label>
+              <input
+                type="range"
+                min={goalPlan.paceRange.min}
+                max={goalPlan.paceRange.max}
+                step={goalPlan.paceRange.step}
+                value={pace ?? goalPlan.paceRange.default}
+                onChange={(e) => setPace(Number(e.target.value))}
+                className="h-2 w-full appearance-none rounded-full accent-foreground"
+                style={{
+                  background: `linear-gradient(to right, var(--success-cell) 0%, var(--success-cell) ${
+                    ((goalPlan.paceRange.dangerAbove - goalPlan.paceRange.min) /
+                      (goalPlan.paceRange.max - goalPlan.paceRange.min)) *
+                    100
+                  }%, var(--danger-cell) ${
+                    ((goalPlan.paceRange.dangerAbove - goalPlan.paceRange.min) /
+                      (goalPlan.paceRange.max - goalPlan.paceRange.min)) *
+                    100
+                  }%, var(--danger-cell) 100%)`,
+                }}
+              />
+              <div className="flex justify-between text-[11px] text-muted-foreground">
+                <span>Rustig ({goalPlan.paceRange.min} kg/week)</span>
+                <span>Snel ({goalPlan.paceRange.max} kg/week)</span>
+              </div>
+              {inDanger && (
+                <p className="mt-2 rounded-lg bg-warning-bg px-3 py-2 text-xs text-foreground">
+                  Dit tempo is agressiever dan doorgaans wordt aangeraden en kan gepaard gaan met meer
+                  spierverlies, vermoeidheid of een groter risico op terugval. Overweeg een rustiger tempo, of
+                  overleg dit met een arts of diëtist.
+                </p>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </Card>
 
-      <Button type="button" variant="secondary" fullWidth onClick={handleCalculate} disabled={calculating || !goal}>
-        {calculating ? "Bezig…" : "Bereken en vul in"}
-      </Button>
-    </div>
+      <Card>
+        <h2 className="mb-1 text-sm font-semibold text-foreground">Dagelijkse doelen</h2>
+        <p className="mb-3 text-[11px] text-muted-foreground">
+          Vul de aanbevolen waarden in op basis van je voedingsschema hierboven, of pas de velden zelf aan.
+        </p>
+        <Button type="button" variant="secondary" fullWidth onClick={handleCalculate} disabled={calculating || !goal}>
+          {calculating ? "Bezig…" : "Bereken en vul in"}
+        </Button>
+        <div className="mt-3">{children}</div>
+      </Card>
+    </>
   );
 }
 
@@ -159,18 +203,22 @@ export function TargetsForm({ userId }: { userId: string }) {
       ? (profile as CompleteProfile)
       : null;
 
-  async function handleCalculate(goal: GoalPlan, pace: number | null) {
-    if (!completeProfile) return;
-    await updateProfile.mutateAsync({ goal, goal_pace_kg_per_week: pace });
+  async function handleCalculate(schedule: NutritionSchedule) {
+    if (!completeProfile || !schedule.goal) return;
+    await updateProfile.mutateAsync({
+      activity_level: schedule.activityLevel,
+      goal: schedule.goal,
+      goal_pace_kg_per_week: schedule.pace,
+    });
 
     const recommended = calculateRecommendedTargets({
       weightKg: completeProfile.weight_kg,
       heightCm: completeProfile.height_cm,
       age: calculateAge(completeProfile.birth_date, todayISO()),
       sex: completeProfile.sex,
-      activityLevel: (completeProfile.activity_level as ActivityLevel) ?? "light",
-      goal,
-      paceKgPerWeek: pace ?? undefined,
+      activityLevel: schedule.activityLevel ?? "light",
+      goal: schedule.goal,
+      paceKgPerWeek: schedule.pace ?? undefined,
     });
 
     reset({ ...recommended, alcohol_extra_water_ml: getValues("alcohol_extra_water_ml") ?? 500 });
@@ -183,76 +231,80 @@ export function TargetsForm({ userId }: { userId: string }) {
 
   if (!targets) return <p className="text-sm text-muted-foreground">Laden…</p>;
 
-  return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-surface-muted p-3">
-        <p className="mb-2 text-sm font-medium text-foreground">Doel &amp; tempo</p>
-        {!completeProfile ? (
-          <p className="text-xs text-muted-foreground">
-            Vul hierboven eerst gewicht, lengte, geslacht en geboortedatum in om je voedingsschema automatisch te
-            laten berekenen (Mifflin-St Jeor).
-          </p>
-        ) : (
-          <GoalPaceEditor profile={completeProfile} onCalculate={handleCalculate} />
-        )}
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Vult alle velden hieronder in — controleer en pas aan waar nodig, en klik daarna op Opslaan.
-        </p>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label htmlFor="calories_kcal">Calorieën (kcal)</Label>
-            <Input
-              id="calories_kcal"
-              type="number"
-              step="any"
-              {...register("calories_kcal", { valueAsNumber: true })}
-            />
-            <FieldError>{errors.calories_kcal?.message}</FieldError>
-          </div>
-          <div>
-            <Label htmlFor="water_ml">Water (ml)</Label>
-            <Input id="water_ml" type="number" step="any" {...register("water_ml", { valueAsNumber: true })} />
-            <FieldError>{errors.water_ml?.message}</FieldError>
-          </div>
-          <div>
-            <Label htmlFor="protein_g">Eiwit (g)</Label>
-            <Input id="protein_g" type="number" step="any" {...register("protein_g", { valueAsNumber: true })} />
-            <FieldError>{errors.protein_g?.message}</FieldError>
-          </div>
-          <div>
-            <Label htmlFor="carbs_g">Koolhydraten (g)</Label>
-            <Input id="carbs_g" type="number" step="any" {...register("carbs_g", { valueAsNumber: true })} />
-            <FieldError>{errors.carbs_g?.message}</FieldError>
-          </div>
-          <div>
-            <Label htmlFor="fat_g">Vet (g)</Label>
-            <Input id="fat_g" type="number" step="any" {...register("fat_g", { valueAsNumber: true })} />
-            <FieldError>{errors.fat_g?.message}</FieldError>
-          </div>
-          <div>
-            <Label htmlFor="fiber_g">Vezels (g)</Label>
-            <Input id="fiber_g" type="number" step="any" {...register("fiber_g", { valueAsNumber: true })} />
-            <FieldError>{errors.fiber_g?.message}</FieldError>
-          </div>
+  const targetsFieldsForm = (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3" noValidate>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="calories_kcal">Calorieën (kcal)</Label>
+          <Input id="calories_kcal" type="number" step="any" {...register("calories_kcal", { valueAsNumber: true })} />
+          <FieldError>{errors.calories_kcal?.message}</FieldError>
         </div>
         <div>
-          <Label htmlFor="alcohol_extra_water_ml">Extra water na een alcoholdag (ml)</Label>
-          <Input
-            id="alcohol_extra_water_ml"
-            type="number"
-            step="any"
-            {...register("alcohol_extra_water_ml", { valueAsNumber: true })}
-          />
-          <FieldError>{errors.alcohol_extra_water_ml?.message}</FieldError>
+          <Label htmlFor="water_ml">Water (ml)</Label>
+          <Input id="water_ml" type="number" step="any" {...register("water_ml", { valueAsNumber: true })} />
+          <FieldError>{errors.water_ml?.message}</FieldError>
         </div>
+        <div>
+          <Label htmlFor="protein_g">Eiwit (g)</Label>
+          <Input id="protein_g" type="number" step="any" {...register("protein_g", { valueAsNumber: true })} />
+          <FieldError>{errors.protein_g?.message}</FieldError>
+        </div>
+        <div>
+          <Label htmlFor="carbs_g">Koolhydraten (g)</Label>
+          <Input id="carbs_g" type="number" step="any" {...register("carbs_g", { valueAsNumber: true })} />
+          <FieldError>{errors.carbs_g?.message}</FieldError>
+        </div>
+        <div>
+          <Label htmlFor="fat_g">Vet (g)</Label>
+          <Input id="fat_g" type="number" step="any" {...register("fat_g", { valueAsNumber: true })} />
+          <FieldError>{errors.fat_g?.message}</FieldError>
+        </div>
+        <div>
+          <Label htmlFor="fiber_g">Vezels (g)</Label>
+          <Input id="fiber_g" type="number" step="any" {...register("fiber_g", { valueAsNumber: true })} />
+          <FieldError>{errors.fiber_g?.message}</FieldError>
+        </div>
+      </div>
+      <div>
+        <Label htmlFor="alcohol_extra_water_ml">Extra water na een alcoholdag (ml)</Label>
+        <Input
+          id="alcohol_extra_water_ml"
+          type="number"
+          step="any"
+          {...register("alcohol_extra_water_ml", { valueAsNumber: true })}
+        />
+        <FieldError>{errors.alcohol_extra_water_ml?.message}</FieldError>
+      </div>
 
-        <Button type="submit" disabled={isSubmitting || !isDirty} fullWidth>
-          {isSubmitting ? "Opslaan…" : "Opslaan"}
-        </Button>
-      </form>
+      <Button type="submit" disabled={isSubmitting || !isDirty} fullWidth>
+        {isSubmitting ? "Opslaan…" : "Opslaan"}
+      </Button>
+    </form>
+  );
+
+  if (!completeProfile) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Voedingsschema</h2>
+          <p className="text-xs text-muted-foreground">
+            Vul eerst gewicht, lengte, geslacht en geboortedatum in bij Profiel om je voedingsschema automatisch te
+            laten berekenen (Mifflin-St Jeor).
+          </p>
+        </Card>
+        <Card>
+          <h2 className="mb-3 text-sm font-semibold text-foreground">Dagelijkse doelen</h2>
+          {targetsFieldsForm}
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <NutritionScheduleEditor profile={completeProfile} onCalculate={handleCalculate}>
+        {targetsFieldsForm}
+      </NutritionScheduleEditor>
     </div>
   );
 }

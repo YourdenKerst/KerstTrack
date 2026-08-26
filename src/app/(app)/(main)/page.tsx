@@ -79,14 +79,14 @@ function DashboardPageContent() {
 
       {correctionActive && <CorrectionBanner userId={userId} dateISO={selectedDate} />}
 
-      <MacroRings totals={totals} targets={targets} />
-
-      <Link
-        href={selectedDate === today ? "/log" : `/log?date=${selectedDate}`}
-        className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
-      >
-        <UtensilsCrossed size={18} /> Maaltijd loggen
-      </Link>
+      <MacroRings totals={totals} targets={targets}>
+        <Link
+          href={selectedDate === today ? "/log" : `/log?date=${selectedDate}`}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+        >
+          <UtensilsCrossed size={18} /> Maaltijd loggen
+        </Link>
+      </MacroRings>
 
       <WaterBlock userId={userId} dateISO={selectedDate} waterMl={waterMl} waterTarget={waterTarget} />
 

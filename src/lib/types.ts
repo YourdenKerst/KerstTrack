@@ -188,6 +188,10 @@ export type Database = {
           id: string;
           user_id: string;
           name: string;
+          intake_time: string;
+          recurrence_type: RecurrenceType;
+          recurrence_n: number | null;
+          recurrence_weekday: number | null;
           sort_order: number;
           is_active: boolean;
           created_at: string;
@@ -196,6 +200,10 @@ export type Database = {
           id?: string;
           user_id: string;
           name: string;
+          intake_time?: string;
+          recurrence_type?: RecurrenceType;
+          recurrence_n?: number | null;
+          recurrence_weekday?: number | null;
           sort_order?: number;
           is_active?: boolean;
           created_at?: string;
@@ -204,6 +212,10 @@ export type Database = {
           id?: string;
           user_id?: string;
           name?: string;
+          intake_time?: string;
+          recurrence_type?: RecurrenceType;
+          recurrence_n?: number | null;
+          recurrence_weekday?: number | null;
           sort_order?: number;
           is_active?: boolean;
           created_at?: string;
@@ -216,30 +228,21 @@ export type Database = {
           user_id: string;
           supplement_id: string;
           slot: number;
-          reminder_time: string;
-          recurrence_type: RecurrenceType;
-          recurrence_n: number | null;
-          recurrence_weekday: number | null;
+          minutes_before: number;
         };
         Insert: {
           id?: string;
           user_id: string;
           supplement_id: string;
           slot: number;
-          reminder_time: string;
-          recurrence_type: RecurrenceType;
-          recurrence_n?: number | null;
-          recurrence_weekday?: number | null;
+          minutes_before?: number;
         };
         Update: {
           id?: string;
           user_id?: string;
           supplement_id?: string;
           slot?: number;
-          reminder_time?: string;
-          recurrence_type?: RecurrenceType;
-          recurrence_n?: number | null;
-          recurrence_weekday?: number | null;
+          minutes_before?: number;
         };
         Relationships: [];
       };

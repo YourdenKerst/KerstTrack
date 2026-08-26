@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { getReminderSettings, subscribeToReminderSettings } from "@/lib/notifications";
-import { isReminderDueOnDate } from "@/lib/calculations/supplementReminders";
+import { computeReminderClockTime, isSupplementDueOnDate } from "@/lib/calculations/supplementReminders";
 import { todayISO } from "@/lib/date";
 import { useAllSupplementReminders } from "@/lib/queries/supplementReminders";
 import { useSupplementLogsForDate } from "@/lib/queries/supplementLogs";
@@ -34,9 +34,10 @@ async function showReminder(supplement: Supplement) {
  * de app (tab of geïnstalleerde PWA) open/geladen is. Zie de toelichting bij
  * de instelling in Settings.
  *
- * Elk supplement heeft tot 3 meldingsmomenten (zie SupplementManager), elk
- * met een eigen herhaalpatroon. Alleen momenten die vandaag aan de beurt zijn
- * en nog niet zijn afgevinkt worden ingepland.
+ * Elk supplement heeft één tijdstip van inname + herhaalpatroon, met tot 3
+ * herinneringen die elk een aantal minuten vóór dat tijdstip afgaan (zie
+ * SupplementManager). Alleen supplementen die vandaag aan de beurt zijn en
+ * nog niet zijn afgevinkt worden ingepland.
  */
 export function SupplementReminders() {
   const userId = useUserId();
@@ -64,9 +65,10 @@ export function SupplementReminders() {
       for (const reminder of reminders ?? []) {
         const supplement = supplementById.get(reminder.supplement_id);
         if (!supplement || checkedIds.has(supplement.id)) continue;
-        if (!isReminderDueOnDate(reminder, today)) continue;
+        if (!isSupplementDueOnDate(supplement, today)) continue;
 
-        const ms = msUntil(reminder.reminder_time.slice(0, 5));
+        const clockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.minutes_before);
+        const ms = msUntil(clockTime);
         if (ms === null) continue;
         timers.push(window.setTimeout(() => showReminder(supplement), ms));
       }

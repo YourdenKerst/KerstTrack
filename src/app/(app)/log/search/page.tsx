@@ -49,6 +49,7 @@ function SearchFoodPageContent() {
     null,
   );
   const [loggedKey, setLoggedKey] = useState<string | null>(null);
+  const [logError, setLogError] = useState(false);
 
   const localMatches = (items ?? []).filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase()));
 
@@ -73,33 +74,50 @@ function SearchFoodPageContent() {
   async function handleConfirm(grams: number) {
     if (!reviewing) return;
     const { product, existingItemId } = reviewing;
+    setLogError(false);
 
-    if (existingItemId) {
-      const item = (items ?? []).find((i) => i.id === existingItemId);
-      if (item) await logItem.mutateAsync({ item, logDate: dateISO, grams });
-    } else {
-      const item = await addFoodItem.mutateAsync({
-        name: product.name ?? "Product",
-        barcode: product.barcode || null,
-        image_url: product.imageUrl,
-        calories_kcal: product.caloriesKcal ?? 0,
-        protein_g: product.proteinG ?? 0,
-        carbs_g: product.carbsG ?? 0,
-        fat_g: product.fatG ?? 0,
-        fiber_g: product.fiberG ?? 0,
-        reference_grams: 100,
-      });
-      await logItem.mutateAsync({ item, logDate: dateISO, grams });
+    try {
+      if (existingItemId) {
+        const item = (items ?? []).find((i) => i.id === existingItemId);
+        if (item) await logItem.mutateAsync({ item, logDate: dateISO, grams });
+      } else {
+        const item = await addFoodItem.mutateAsync({
+          name: product.name ?? "Product",
+          barcode: product.barcode || null,
+          image_url: product.imageUrl,
+          calories_kcal: product.caloriesKcal ?? 0,
+          protein_g: product.proteinG ?? 0,
+          carbs_g: product.carbsG ?? 0,
+          fat_g: product.fatG ?? 0,
+          fiber_g: product.fiberG ?? 0,
+          reference_grams: 100,
+        });
+        await logItem.mutateAsync({ item, logDate: dateISO, grams });
+      }
+
+      setLoggedKey(existingItemId ?? product.barcode);
+      setReviewing(null);
+      window.setTimeout(() => setLoggedKey(null), 1500);
+    } catch {
+      setLogError(true);
     }
-
-    setLoggedKey(existingItemId ?? product.barcode);
-    setReviewing(null);
-    window.setTimeout(() => setLoggedKey(null), 1500);
   }
 
   if (reviewing) {
     return (
-      <ScannedProductReview product={reviewing.product} onCancel={() => setReviewing(null)} onConfirm={handleConfirm} />
+      <div className="space-y-2">
+        <ScannedProductReview
+          product={reviewing.product}
+          onCancel={() => setReviewing(null)}
+          onConfirm={handleConfirm}
+        />
+        {logError && (
+          <p className="text-center text-sm text-danger">
+            Opslaan is niet gelukt. Probeer het opnieuw — als dit blijft gebeuren, is de database mogelijk nog niet
+            bijgewerkt.
+          </p>
+        )}
+      </div>
     );
   }
 

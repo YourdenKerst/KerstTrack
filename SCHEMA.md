@@ -12,8 +12,8 @@ Dit document legt het Postgres/Supabase-datamodel uit. De uitvoerbare DDL staat 
 | `daily_targets` | De instelbare dagdoelen (calorieën/macro's/water) — 1 actieve rij per gebruiker |
 | `food_items` | Herbruikbare "eigen producten", per 100g |
 | `food_logs` | Wat je daadwerkelijk per dag hebt gegeten |
-| `supplements` | Het (aanpasbare) supplementenschema (alleen de naam) |
-| `supplement_reminders` | Tot 3 meldingsmomenten per supplement, elk met tijdstip + herhaling |
+| `supplements` | Het (aanpasbare) supplementenschema: naam + tijdstip van inname + herhaling |
+| `supplement_reminders` | Tot 3 herinneringen per supplement, elk een aantal minuten vóór inname |
 | `supplement_logs` | Afvink-momenten per supplement per dag |
 | `correction_checkoffs` | Afvinken van de 3 weekendcorrectie-taken |
 | `water_logs` | Elke waterinname-toevoeging |
@@ -24,7 +24,7 @@ Dit document legt het Postgres/Supabase-datamodel uit. De uitvoerbare DDL staat 
 
 De opdracht noemde 9 categorieën; `correction_checkoffs`, `supplement_reminders`, `recipes` en `recipe_ingredients` zijn latere toevoegingen (zie onder).
 
-**Supplement-herinneringen zijn losgetrokken van het supplement zelf.** Naam is het enige dat op `supplements` staat; dosis en een vrije tijdstip-tekst zijn eruit gehaald. `supplement_reminders` houdt per supplement tot 3 momenten bij (slot 1 verplicht in de UI, 2 en 3 optioneel), elk met een eigen `reminder_time` en `recurrence_type` (`daily` / `every_n_days` met `recurrence_n` / `weekly` met `recurrence_weekday`, 0 = maandag). Dit is ook de tabel die straks een server-cron zou raadplegen voor echte push-meldingen.
+**Tijdstip van inname + herhaling horen bij het supplement, niet bij de herinnering.** `supplements` heeft één `intake_time` en één `recurrence_type` (`daily` / `every_n_days` met `recurrence_n` / `weekly` met `recurrence_weekday`, 0 = maandag) — dosis en een vrije tijdstip-tekst zijn eruit gehaald. `supplement_reminders` houdt tot 3 herinneringen per supplement bij (slot 1 verplicht in de UI, 2 en 3 optioneel), elk alleen een `minutes_before` (aantal minuten vóór `intake_time`; 0 = op het moment zelf). Dit is ook de tabel die straks een server-cron zou raadplegen voor echte push-meldingen.
 
 **Recepten rekenen per 100 gram.** Elk `recipe_ingredients`-item slaat zijn voedingswaarden per 100g op (net als Open Food Facts dat doet), plus hoeveel gram daadwerkelijk in het recept gaat. Zo kun je een ingrediënt (bv. bloem) aan meerdere recepten toevoegen met een andere hoeveelheid, en blijft opschalen naar het totale recept — of een deel daarvan — een simpele vermenigvuldiging. `food_items.reference_grams` (standaard 100) maakt het mogelijk om een bestaand, eerder handmatig ingevoerd product ook als ingrediënt te herschalen.
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card } from "@/components/ui";
 import type { MacroTotals } from "@/lib/calculations/nutrition";
 import type { DailyTargets } from "@/lib/types";
@@ -33,7 +34,15 @@ function MacroMini({
   );
 }
 
-export function MacroRings({ totals, targets }: { totals: MacroTotals; targets: DailyTargets }) {
+export function MacroRings({
+  totals,
+  targets,
+  children,
+}: {
+  totals: MacroTotals;
+  targets: DailyTargets;
+  children?: ReactNode;
+}) {
   return (
     <Card>
       <div className="flex items-center gap-3">
@@ -58,6 +67,7 @@ export function MacroRings({ totals, targets }: { totals: MacroTotals; targets: 
           <MacroMini label="Vet" value={totals.fat_g} target={targets.fat_g} color="var(--macro-fat)" />
         </div>
       </div>
+      {children && <div className="mt-4">{children}</div>}
     </Card>
   );
 }

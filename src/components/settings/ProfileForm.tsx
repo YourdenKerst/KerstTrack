@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button, FieldError, Input, Label, Select } from "@/components/ui";
-import { ACTIVITY_LEVELS } from "@/lib/calculations/recommendedTargets";
 import { useProfile, useUpdateProfile } from "@/lib/queries/profiles";
 
 const schema = z.object({
@@ -14,7 +13,6 @@ const schema = z.object({
   height_cm: z.number({ error: "Vul een getal in" }).positive("Moet groter dan 0 zijn"),
   sex: z.enum(["male", "female"]).nullable(),
   birth_date: z.string().nullable(),
-  activity_level: z.string().nullable(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -39,7 +37,6 @@ export function ProfileForm({ userId }: { userId: string }) {
         height_cm: profile.height_cm ?? 0,
         sex: profile.sex,
         birth_date: profile.birth_date,
-        activity_level: profile.activity_level,
       });
     }
   }, [profile, reset]);
@@ -95,18 +92,6 @@ export function ProfileForm({ userId }: { userId: string }) {
             {...register("birth_date", { setValueAs: setValueAsNullableText })}
           />
         </div>
-      </div>
-
-      <div>
-        <Label htmlFor="activity_level">Activiteitsniveau</Label>
-        <Select id="activity_level" {...register("activity_level", { setValueAs: setValueAsNullableText })}>
-          <option value="">Niet ingevuld</option>
-          {ACTIVITY_LEVELS.map((level) => (
-            <option key={level.key} value={level.key}>
-              {level.label}
-            </option>
-          ))}
-        </Select>
       </div>
 
       <Button type="submit" disabled={isSubmitting || !isDirty} fullWidth>

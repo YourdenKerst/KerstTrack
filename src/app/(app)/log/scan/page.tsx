@@ -11,7 +11,7 @@ import { useAddFoodItem, findFoodItemByBarcode } from "@/lib/queries/foodItems";
 import { useLogFoodItem } from "@/lib/queries/foodLogs";
 import { useUserId } from "@/lib/user-context";
 
-type ScanStatus = "idle" | "looking-up" | "not-found" | "error" | "logged";
+type ScanStatus = "idle" | "looking-up" | "not-found" | "error" | "log-error" | "logged";
 
 export default function ScanFoodPage() {
   return (
@@ -63,20 +63,24 @@ function ScanFoodPageContent() {
 
   async function handleConfirm(grams: number) {
     if (!scannedProduct) return;
-    const item = await addFoodItem.mutateAsync({
-      name: scannedProduct.name ?? "Gescand product",
-      barcode: scannedProduct.barcode,
-      image_url: scannedProduct.imageUrl,
-      calories_kcal: scannedProduct.caloriesKcal ?? 0,
-      protein_g: scannedProduct.proteinG ?? 0,
-      carbs_g: scannedProduct.carbsG ?? 0,
-      fat_g: scannedProduct.fatG ?? 0,
-      fiber_g: scannedProduct.fiberG ?? 0,
-      reference_grams: 100,
-    });
-    await logFoodItem.mutateAsync({ item, logDate: dateISO, grams });
-    setScannedProduct(null);
-    setStatus("logged");
+    try {
+      const item = await addFoodItem.mutateAsync({
+        name: scannedProduct.name ?? "Gescand product",
+        barcode: scannedProduct.barcode,
+        image_url: scannedProduct.imageUrl,
+        calories_kcal: scannedProduct.caloriesKcal ?? 0,
+        protein_g: scannedProduct.proteinG ?? 0,
+        carbs_g: scannedProduct.carbsG ?? 0,
+        fat_g: scannedProduct.fatG ?? 0,
+        fiber_g: scannedProduct.fiberG ?? 0,
+        reference_grams: 100,
+      });
+      await logFoodItem.mutateAsync({ item, logDate: dateISO, grams });
+      setScannedProduct(null);
+      setStatus("logged");
+    } catch {
+      setStatus("log-error");
+    }
   }
 
   function reset() {
@@ -123,7 +127,7 @@ function ScanFoodPageContent() {
             }
             className="text-sm font-medium text-primary underline-offset-2 hover:underline"
           >
-            Handmatig toevoegen
+            Nieuw product toevoegen
           </button>
         </div>
       )}
@@ -135,6 +139,13 @@ function ScanFoodPageContent() {
             Opnieuw proberen
           </button>
         </div>
+      )}
+
+      {status === "log-error" && (
+        <p className="py-2 text-center text-sm text-danger">
+          Opslaan is niet gelukt. Probeer het opnieuw — als dit blijft gebeuren, is de database mogelijk nog niet
+          bijgewerkt.
+        </p>
       )}
 
       {scannerOpen && <BarcodeScanner onDetected={handleDetected} onClose={() => router.push("/")} />}
