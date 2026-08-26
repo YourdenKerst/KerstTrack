@@ -208,8 +208,12 @@ function RecipeCreator({ userId, onDone }: { userId: string; onDone: () => void 
       {ingredients.length > 0 && (
         <ul className="divide-y divide-border rounded-xl border border-border px-3">
           {ingredients.map((ingredient, index) => (
-            <li key={index} className="flex items-center justify-between gap-2 py-2 text-sm">
-              <span className="min-w-0 truncate text-foreground">
+            <li key={index} className="flex items-center gap-2 py-2 text-sm">
+              {ingredient.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element -- eigen/OFF-afbeelding, geen build-time optimalisatie nodig
+                <img src={ingredient.image_url} alt="" className="h-7 w-7 shrink-0 rounded-lg object-cover" />
+              ) : null}
+              <span className="min-w-0 flex-1 truncate text-foreground">
                 {ingredient.name} — {ingredient.grams}g
               </span>
               <button

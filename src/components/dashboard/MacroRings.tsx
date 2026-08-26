@@ -1,7 +1,6 @@
 import { Card } from "@/components/ui";
 import type { MacroTotals } from "@/lib/calculations/nutrition";
 import type { DailyTargets } from "@/lib/types";
-import { ProgressBar } from "./ProgressBar";
 import { ProgressRing } from "./ProgressRing";
 
 function pct(value: number, target: number): number {
@@ -34,43 +33,7 @@ function MacroMini({
   );
 }
 
-export function LabeledProgressBar({
-  label,
-  value,
-  target,
-  unit,
-  color,
-}: {
-  label: string;
-  value: number;
-  target: number;
-  unit: string;
-  color: string;
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between text-xs">
-        <span className="font-medium text-foreground">{label}</span>
-        <span className="text-muted-foreground">
-          {Math.round(value)} / {Math.round(target)} {unit} · <span className="font-medium">{pct(value, target)}%</span>
-        </span>
-      </div>
-      <ProgressBar value={value} max={target} color={color} />
-    </div>
-  );
-}
-
-export function MacroRings({
-  totals,
-  targets,
-  waterMl,
-  waterTarget,
-}: {
-  totals: MacroTotals;
-  targets: DailyTargets;
-  waterMl: number;
-  waterTarget: number;
-}) {
+export function MacroRings({ totals, targets }: { totals: MacroTotals; targets: DailyTargets }) {
   return (
     <Card>
       <div className="flex items-center gap-3">
@@ -94,17 +57,6 @@ export function MacroRings({
           <MacroMini label="Koolh." value={totals.carbs_g} target={targets.carbs_g} color="var(--macro-carbs)" />
           <MacroMini label="Vet" value={totals.fat_g} target={targets.fat_g} color="var(--macro-fat)" />
         </div>
-      </div>
-
-      <div className="mt-5 space-y-3">
-        <LabeledProgressBar
-          label="Vezels"
-          value={totals.fiber_g}
-          target={targets.fiber_g}
-          unit="g"
-          color="var(--macro-fiber)"
-        />
-        <LabeledProgressBar label="Water" value={waterMl} target={waterTarget} unit="ml" color="var(--macro-water)" />
       </div>
     </Card>
   );

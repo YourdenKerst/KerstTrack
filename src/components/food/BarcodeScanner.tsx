@@ -57,16 +57,19 @@ export function BarcodeScanner({ onDetected, onClose }: BarcodeScannerProps) {
             target,
             constraints: {
               facingMode: "environment",
-              width: { min: 640, ideal: 1920 },
-              height: { min: 480, ideal: 1080 },
+              // 1280x720 i.p.v. 1080p: minder pixels per frame te verwerken, dus meer
+              // scanpogingen per seconde — 1080p bleek de live-scan juist trager te maken.
+              width: { min: 640, ideal: 1280 },
+              height: { min: 480, ideal: 720 },
               // Best-effort — genegeerd op browsers/toestellen die dit niet ondersteunen
               // (o.a. Safari), maar helpt op focus-op-afstand-camera's bij dichtbij scannen.
               advanced: [{ focusMode: "continuous" }],
             } as unknown as MediaTrackConstraints,
           },
-          // "large" patchSize + halfSample uit: nauwkeuriger op een dichtbij gehouden
-          // telefooncamera, ten koste van wat CPU — de scansessie is kort genoeg dat dat niet opvalt.
-          locator: { patchSize: "large", halfSample: false },
+          // "large" patchSize: nauwkeuriger op een dichtbij gehouden telefooncamera.
+          // halfSample weer aan (default) voor snelheid — de resolutie hierboven is
+          // al lager, dus dit is niet meer nodig voor precisie en scheelt CPU.
+          locator: { patchSize: "large", halfSample: true },
           decoder: { readers: ["ean_reader", "ean_8_reader", "upc_reader", "upc_e_reader"] },
           locate: true,
         },

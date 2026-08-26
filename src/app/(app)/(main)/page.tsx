@@ -1,16 +1,19 @@
 "use client";
 
+import { UtensilsCrossed } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Card } from "@/components/ui";
 import { CorrectionBanner } from "@/components/dashboard/CorrectionBanner";
 import { DaySwitcher } from "@/components/dashboard/DaySwitcher";
 import { MacroRings } from "@/components/dashboard/MacroRings";
-import { QuickActions } from "@/components/dashboard/QuickActions";
 import { SupplementChecklist } from "@/components/dashboard/SupplementChecklist";
-import { WeightTrendCard } from "@/components/dashboard/WeightTrendCard";
+import { WaterBlock } from "@/components/dashboard/WaterBlock";
+import { WeightHeaderBadge } from "@/components/dashboard/WeightHeaderBadge";
 import { TodayFoodList } from "@/components/food/TodayFoodList";
 import { sumMacros } from "@/lib/calculations/nutrition";
+import type { GoalPlan } from "@/lib/calculations/recommendedTargets";
 import { addDaysISO, formatFullDate, MAX_FUTURE_PLANNING_DAYS, todayISO } from "@/lib/date";
 import { useEffectiveWaterTarget } from "@/lib/hooks/useEffectiveWaterTarget";
 import { useFoodLogsForDate } from "@/lib/queries/foodLogs";
@@ -62,9 +65,12 @@ function DashboardPageContent() {
   return (
     <div className="space-y-4 px-4 pt-6">
       <header className="space-y-2">
-        <h1 className="text-xl font-semibold text-foreground">
-          Welkom{profile?.display_name ? `, ${profile.display_name}` : ""}
-        </h1>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="truncate text-xl font-semibold text-foreground">
+            Welkom{profile?.display_name ? `, ${profile.display_name}` : ""}
+          </h1>
+          <WeightHeaderBadge userId={userId} goal={(profile?.goal as GoalPlan | null) ?? null} />
+        </div>
         <Card className="py-2">
           <DaySwitcher selectedDate={selectedDate} onChange={setSelectedDate} />
         </Card>
@@ -73,15 +79,20 @@ function DashboardPageContent() {
 
       {correctionActive && <CorrectionBanner userId={userId} dateISO={selectedDate} />}
 
-      <MacroRings totals={totals} targets={targets} waterMl={waterMl} waterTarget={waterTarget} />
+      <MacroRings totals={totals} targets={targets} />
 
-      <QuickActions userId={userId} dateISO={selectedDate} />
+      <Link
+        href={selectedDate === today ? "/log" : `/log?date=${selectedDate}`}
+        className="flex items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-opacity active:opacity-80"
+      >
+        <UtensilsCrossed size={18} /> Maaltijd loggen
+      </Link>
 
-      <SupplementChecklist userId={userId} dateISO={selectedDate} />
-
-      <WeightTrendCard userId={userId} />
+      <WaterBlock userId={userId} dateISO={selectedDate} waterMl={waterMl} waterTarget={waterTarget} />
 
       <TodayFoodList userId={userId} dateISO={selectedDate} />
+
+      <SupplementChecklist userId={userId} dateISO={selectedDate} />
     </div>
   );
 }
