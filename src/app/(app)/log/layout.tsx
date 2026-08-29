@@ -5,6 +5,7 @@ import { Barcode, ChefHat, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
+import { dashboardHref, todayISO } from "@/lib/date";
 
 const MODES = [
   { href: "/log/new", label: "Nieuw", icon: Plus },
@@ -26,7 +27,7 @@ export default function LogLayout({ children }: { children: ReactNode }) {
         <h1 className="text-sm font-semibold text-foreground">Maaltijd toevoegen</h1>
         <button
           type="button"
-          onClick={() => router.push("/")}
+          onClick={() => router.push(dashboardHref(dateParam ?? todayISO()))}
           aria-label="Sluiten"
           className="rounded-full p-2.5 text-muted-foreground transition-colors active:bg-surface-muted active:text-foreground"
         >

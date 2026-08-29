@@ -1,12 +1,12 @@
 "use client";
 
 import { ChefHat, Plus, Trash2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Button, Card, ImageUploadField, Input, Label } from "@/components/ui";
 import { RecipeIngredientPicker, type PickedIngredient } from "@/components/log/RecipeIngredientPicker";
 import { scaleRecipeToGrams, sumRecipeIngredients, totalRecipeGrams } from "@/lib/calculations/recipes";
-import { todayISO } from "@/lib/date";
+import { dashboardHref, todayISO } from "@/lib/date";
 import { useAddFoodLog } from "@/lib/queries/foodLogs";
 import {
   useAddRecipe,
@@ -95,9 +95,9 @@ function RecipeRow({
   const { data: ingredients } = useRecipeIngredients(expanded ? recipeId : null);
   const deleteRecipe = useDeleteRecipe(userId);
   const addFoodLog = useAddFoodLog(userId);
+  const router = useRouter();
   const totalGrams = ingredients ? totalRecipeGrams(ingredients) : 0;
   const [grams, setGrams] = useState<number | null>(null);
-  const [logged, setLogged] = useState(false);
 
   async function handleLog() {
     if (!ingredients) return;
@@ -112,8 +112,7 @@ function RecipeRow({
       log_date: dateISO,
       food_item_id: null,
     });
-    setLogged(true);
-    window.setTimeout(() => setLogged(false), 1500);
+    router.push(dashboardHref(dateISO));
   }
 
   return (
@@ -161,7 +160,7 @@ function RecipeRow({
               />
             </div>
             <Button type="button" onClick={handleLog} disabled={addFoodLog.isPending}>
-              {logged ? "Gelogd!" : "Loggen"}
+              {addFoodLog.isPending ? "Loggen…" : "Loggen"}
             </Button>
           </div>
         </div>

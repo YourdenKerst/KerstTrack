@@ -42,6 +42,7 @@ create table if not exists public.food_items (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  brand text,
   barcode text,
   image_url text,
   calories_kcal numeric(6,1) not null,
@@ -49,9 +50,15 @@ create table if not exists public.food_items (
   carbs_g numeric(6,1) not null default 0,
   fat_g numeric(6,1) not null default 0,
   fiber_g numeric(6,1) not null default 0,
-  -- Hoeveel gram de bovenstaande waarden vertegenwoordigen — nodig om dit item
-  -- correct te kunnen herschalen als receptingrediënt (zie recipe_ingredients).
+  -- Hoeveel gram/ml de bovenstaande waarden vertegenwoordigen — nodig om dit
+  -- item correct te kunnen herschalen als receptingrediënt (zie
+  -- recipe_ingredients) en om de standaardhoeveelheid bij het loggen te tonen.
   reference_grams numeric(7,1) not null default 100,
+  -- Eenheid waarin hoeveelheden voor dit product getoond worden (g of ml).
+  unit text not null default 'g' check (unit in ('g', 'ml')),
+  -- Portiegrootte uit Open Food Facts (bv. 6 voor "1 portie = 6g"), zodat je
+  -- bij het loggen in porties kunt invoeren i.p.v. een absoluut aantal.
+  serving_size numeric(7,2),
   -- Alleen favorieten worden getoond bij het zoeken/loggen — een product
   -- rechtstreeks loggen (zonder op het hartje te tikken) slaat niets hier op.
   is_favorite boolean not null default true,
@@ -122,6 +129,9 @@ create table if not exists public.supplements (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  -- Vrij te kiezen kleur (hex) om supplementen visueel te groeperen, bv. per
+  -- innamemoment (ontbijt/lunch/diner) — puur cosmetisch, geen vaste opties.
+  color text,
   -- Tijdstip van inname + herhaling gelden voor het hele supplement (niet per
   -- herinnering — zie supplement_reminders hieronder voor die offsets).
   intake_time time not null default '09:00',
@@ -138,15 +148,15 @@ create index if not exists supplements_user_idx on public.supplements(user_id, i
 
 -- =========================================================
 -- 7b. supplement_reminders — tot 3 herinneringsmomenten per supplement, elk
--- een aantal minuten vóór intake_time (0 = op het moment zelf). Slot 1 is in
--- de app verplicht, 2 en 3 optioneel.
+-- een aantal minuten vóór (negatief) of na (positief) intake_time (0 = op het
+-- moment zelf). Slot 1 is in de app verplicht, 2 en 3 optioneel.
 -- =========================================================
 create table if not exists public.supplement_reminders (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   supplement_id uuid not null references public.supplements(id) on delete cascade,
   slot smallint not null check (slot in (1, 2, 3)),
-  minutes_before integer not null default 0 check (minutes_before >= 0),
+  offset_minutes integer not null default 0,
   unique (supplement_id, slot)
 );
 create index if not exists supplement_reminders_supplement_idx on public.supplement_reminders(supplement_id);
@@ -536,3 +546,57 @@ create table if not exists public.sent_reminder_notifications (
   unique (supplement_id, slot, log_date)
 );
 alter table public.sent_reminder_notifications enable row level security;
+
+-- =========================================================
+-- Migratie: supplement-kleur, en herinneringen ook ná inname (i.p.v. alleen
+-- ervoor). offset_minutes vervangt minutes_before: negatief = ervoor,
+-- positief = erna, 0 = op het moment zelf. Bestaande minutes_before (altijd
+-- "ervoor") wordt 1-op-1 overgenomen als het negatief.
+-- =========================================================
+alter table public.supplements add column if not exists color text;
+
+alter table public.supplement_reminders add column if not exists offset_minutes integer not null default 0;
+-- Kan niet als kale UPDATE: die refereert minutes_before, wat na een eerdere
+-- run van dit script (die de kolom hieronder droppt) niet meer bestaat, en een
+-- kale SQL-statement wordt altijd volledig geparsed — ook een niet-bereikte
+-- WHERE-tak. Een DO-block plant zijn SQL pas bij het bereiken ervan, dus dit
+-- blijft veilig herhaalbaar.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'supplement_reminders' and column_name = 'minutes_before'
+  ) then
+    update public.supplement_reminders set offset_minutes = -minutes_before where minutes_before <> 0;
+  end if;
+end $$;
+alter table public.supplement_reminders drop column if exists minutes_before;
+
+-- =========================================================
+-- Migratie: merk, eenheid (g/ml) en portiegrootte bij producten — voor
+-- merk-zoeken en het loggen in "aantal porties" i.p.v. alleen een absoluut
+-- aantal gram/ml.
+-- =========================================================
+alter table public.food_items add column if not exists brand text;
+alter table public.food_items add column if not exists unit text not null default 'g';
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'food_items_unit_check'
+  ) then
+    alter table public.food_items add constraint food_items_unit_check check (unit in ('g', 'ml'));
+  end if;
+end $$;
+alter table public.food_items add column if not exists serving_size numeric(7,2);
+
+-- =========================================================
+-- Migratie: bewaartermijn. Voeding (food_logs) wordt na 3 dagen automatisch
+-- opgeruimd — alleen de streaks (supplement_logs) en de andere logs
+-- (water/gewicht/alcohol, nog steeds gebruikt in Trends) blijven lang bewaard.
+-- Draait dagelijks via pg_cron (zelfde mechanisme als de reminder-cron).
+-- =========================================================
+select cron.schedule(
+  'purge-old-food-logs',
+  '30 2 * * *',
+  $$ delete from public.food_logs where log_date < (current_date - interval '3 days'); $$
+) where not exists (select 1 from cron.job where jobname = 'purge-old-food-logs');

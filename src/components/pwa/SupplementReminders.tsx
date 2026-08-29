@@ -35,9 +35,9 @@ async function showReminder(supplement: Supplement) {
  * de instelling in Settings.
  *
  * Elk supplement heeft één tijdstip van inname + herhaalpatroon, met tot 3
- * herinneringen die elk een aantal minuten vóór dat tijdstip afgaan (zie
- * SupplementManager). Alleen supplementen die vandaag aan de beurt zijn en
- * nog niet zijn afgevinkt worden ingepland.
+ * herinneringen die elk een aantal minuten vóór of ná dat tijdstip afgaan
+ * (zie SupplementManager). Alleen supplementen die vandaag aan de beurt zijn
+ * en nog niet zijn afgevinkt worden ingepland.
  */
 export function SupplementReminders() {
   const userId = useUserId();
@@ -67,7 +67,7 @@ export function SupplementReminders() {
         if (!supplement || checkedIds.has(supplement.id)) continue;
         if (!isSupplementDueOnDate(supplement, today)) continue;
 
-        const clockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.minutes_before);
+        const clockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.offset_minutes);
         const ms = msUntil(clockTime);
         if (ms === null) continue;
         timers.push(window.setTimeout(() => showReminder(supplement), ms));

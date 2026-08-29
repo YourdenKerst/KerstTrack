@@ -9,9 +9,10 @@ interface CheckRowProps {
   checked: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  color?: string | null;
 }
 
-export function CheckRow({ label, sublabel, checked, onToggle, disabled }: CheckRowProps) {
+export function CheckRow({ label, sublabel, checked, onToggle, disabled, color }: CheckRowProps) {
   return (
     <button
       type="button"
@@ -30,11 +31,12 @@ export function CheckRow({ label, sublabel, checked, onToggle, disabled }: Check
       <span className="min-w-0 flex-1">
         <span
           className={clsx(
-            "block text-sm font-medium transition-colors",
+            "flex items-center gap-1.5 text-sm font-medium transition-colors",
             checked ? "text-muted-foreground line-through" : "text-foreground",
           )}
         >
-          {label}
+          {color && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />}
+          <span className="truncate">{label}</span>
         </span>
         {sublabel && <span className="block truncate text-xs text-muted-foreground">{sublabel}</span>}
       </span>

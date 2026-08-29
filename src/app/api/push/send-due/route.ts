@@ -25,13 +25,15 @@ function nowInTimezone() {
 }
 
 /**
- * Wordt elke paar minuten aangeroepen door een cron (zie
- * .github/workflows/send-reminders.yml) — Vercel Hobby staat geen cron
- * frequenter dan 1x/dag toe, GitHub Actions wel. Verstuurt een echte Web
- * Push-melding (werkt ook als de app dicht is) voor elke herinnering die nu
- * verstreken is en nog niet is afgevinkt. `sent_reminder_notifications`
- * voorkomt dubbel versturen — of de cron nu elke minuut of elke 10 minuten
- * draait, elke herinnering gaat maar één keer per dag daadwerkelijk uit.
+ * Wordt elke minuut aangeroepen door een pg_cron-job in Supabase zelf (zie
+ * de "echte Web Push"-migratie in schema.sql) — Vercel Hobby staat geen cron
+ * frequenter dan 1x/dag toe. GitHub Actions (.github/workflows/send-reminders.yml)
+ * blijft als backup staan maar bleek in de praktijk te onbetrouwbaar op dit
+ * schaal (5-minuten-schema vuurde soms 45+ minuten niet af). Verstuurt een
+ * echte Web Push-melding (werkt ook als de app dicht is) voor elke herinnering
+ * die nu verstreken is en nog niet is afgevinkt. `sent_reminder_notifications`
+ * voorkomt dubbel versturen — ongeacht hoe vaak de cron draait, elke
+ * herinnering gaat maar één keer per dag daadwerkelijk uit.
  */
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
     if (userSubs.length === 0) continue;
 
     for (const reminder of remindersRes.data.filter((r) => r.supplement_id === supplement.id)) {
-      const reminderClockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.minutes_before);
+      const reminderClockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.offset_minutes);
       if (reminderClockTime > clockTime) continue; // nog niet zo ver vandaag
 
       // Atomair: alleen versturen als dit de eerste keer is dat dit lukt vandaag.

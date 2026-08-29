@@ -1,11 +1,11 @@
 "use client";
 
 import { Heart, Loader2, Search, Trash2 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ScannedProductReview } from "@/components/food/ScannedProductReview";
 import { Input } from "@/components/ui";
-import { todayISO } from "@/lib/date";
+import { dashboardHref, todayISO } from "@/lib/date";
 import { scaleProductToGrams, searchProductsByName, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
 import { useAddFoodItem, useDeleteFoodItem, useFoodItems, useSetFoodItemFavorite } from "@/lib/queries/foodItems";
 import { useAddFoodLog, useLogFoodItem } from "@/lib/queries/foodLogs";
@@ -17,12 +17,15 @@ function toOffShape(item: FoodItem): OpenFoodFactsProduct {
   return {
     barcode: item.barcode ?? "",
     name: item.name,
+    brand: item.brand,
     imageUrl: item.image_url,
     caloriesKcal: item.calories_kcal * factor,
     proteinG: item.protein_g * factor,
     carbsG: item.carbs_g * factor,
     fatG: item.fat_g * factor,
     fiberG: item.fiber_g * factor,
+    unit: item.unit,
+    servingSize: item.serving_size,
   };
 }
 
@@ -36,6 +39,7 @@ export default function SearchFoodPage() {
 
 function SearchFoodPageContent() {
   const userId = useUserId();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const dateISO = searchParams.get("date") ?? todayISO();
   const { data: items } = useFoodItems(userId);
@@ -51,11 +55,13 @@ function SearchFoodPageContent() {
   const [reviewing, setReviewing] = useState<{ product: OpenFoodFactsProduct; existingItemId: string | null } | null>(
     null,
   );
-  const [loggedKey, setLoggedKey] = useState<string | null>(null);
   const [logError, setLogError] = useState(false);
 
   const favorites = (items ?? []).filter((item) => item.is_favorite);
-  const localMatches = favorites.filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const queryLower = query.trim().toLowerCase();
+  const localMatches = favorites.filter(
+    (item) => item.name.toLowerCase().includes(queryLower) || item.brand?.toLowerCase().includes(queryLower),
+  );
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -93,6 +99,7 @@ function SearchFoodPageContent() {
     }
     const created = await addFoodItem.mutateAsync({
       name: product.name ?? "Product",
+      brand: product.brand,
       barcode: product.barcode || null,
       image_url: product.imageUrl,
       calories_kcal: product.caloriesKcal ?? 0,
@@ -101,6 +108,8 @@ function SearchFoodPageContent() {
       fat_g: product.fatG ?? 0,
       fiber_g: product.fiberG ?? 0,
       reference_grams: 100,
+      unit: product.unit,
+      serving_size: product.servingSize,
       is_favorite: true,
     });
     return created.id;
@@ -112,7 +121,7 @@ function SearchFoodPageContent() {
     setReviewing({ ...reviewing, existingItemId: id });
   }
 
-  async function handleConfirm(grams: number) {
+  async function handleConfirm(amount: number) {
     if (!reviewing) return;
     const { product, existingItemId } = reviewing;
     setLogError(false);
@@ -120,7 +129,7 @@ function SearchFoodPageContent() {
     try {
       const item = existingItemId ? (items ?? []).find((i) => i.id === existingItemId) : null;
       if (item) {
-        await logItem.mutateAsync({ item, logDate: dateISO, grams });
+        await logItem.mutateAsync({ item, logDate: dateISO, grams: amount });
       } else {
         const scaled = scaleProductToGrams(
           {
@@ -130,12 +139,12 @@ function SearchFoodPageContent() {
             fatG: product.fatG ?? 0,
             fiberG: product.fiberG ?? 0,
           },
-          grams,
+          amount,
         );
         await addFoodLog.mutateAsync({
           food_item_id: null,
           recipe_id: null,
-          name: product.name ?? "Product",
+          name: product.brand ? `${product.name} (${product.brand})` : (product.name ?? "Product"),
           image_url: product.imageUrl,
           ingredient_count: null,
           calories_kcal: scaled.caloriesKcal,
@@ -147,9 +156,7 @@ function SearchFoodPageContent() {
         });
       }
 
-      setLoggedKey(existingItemId ?? product.barcode);
-      setReviewing(null);
-      window.setTimeout(() => setLoggedKey(null), 1500);
+      router.push(dashboardHref(dateISO));
     } catch {
       setLogError(true);
     }
@@ -183,7 +190,7 @@ function SearchFoodPageContent() {
       <div className="relative">
         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Zoek een product op naam…"
+          placeholder="Zoek op naam of merk…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-9"
@@ -208,13 +215,15 @@ function SearchFoodPageContent() {
                     <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-muted" />
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">{item.name}</span>
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {item.name}
+                      {item.brand && <span className="font-normal text-muted-foreground"> · {item.brand}</span>}
+                    </span>
                     <span className="block text-xs text-muted-foreground">
                       {Math.round(item.calories_kcal)} kcal · {Math.round(item.protein_g)}p / {Math.round(item.carbs_g)}k /{" "}
                       {Math.round(item.fat_g)}v
                     </span>
                   </span>
-                  {loggedKey === item.id && <span className="shrink-0 text-xs font-medium text-success">Gelogd!</span>}
                 </button>
                 <button
                   type="button"
@@ -268,14 +277,12 @@ function SearchFoodPageContent() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-foreground">
                         {product.name ?? "Onbekend product"}
+                        {product.brand && <span className="font-normal text-muted-foreground"> · {product.brand}</span>}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {Math.round(product.caloriesKcal ?? 0)} kcal/100g
+                        {Math.round(product.caloriesKcal ?? 0)} kcal/100{product.unit}
                       </span>
                     </span>
-                    {loggedKey === product.barcode && (
-                      <span className="shrink-0 text-xs font-medium text-success">Gelogd!</span>
-                    )}
                   </button>
                   <button
                     type="button"
@@ -295,8 +302,8 @@ function SearchFoodPageContent() {
       {!items && <p className="py-6 text-center text-sm text-muted-foreground">Laden…</p>}
       {items && favorites.length === 0 && query.trim().length < 2 && (
         <p className="py-6 text-center text-sm text-muted-foreground">
-          Typ een naam om te zoeken — zowel in je favorieten als in Open Food Facts. Tik op het hartje om iets te
-          bewaren als favoriet.
+          Typ een naam of merk om te zoeken — zowel in je favorieten als in Open Food Facts. Tik op het hartje om iets
+          te bewaren als favoriet.
         </p>
       )}
     </div>

@@ -9,6 +9,7 @@ import { useAddFoodItem } from "@/lib/queries/foodItems";
 
 const schema = z.object({
   name: z.string().min(1, "Naam is verplicht"),
+  brand: z.string().nullable(),
   calories_kcal: z.number({ error: "Vul een getal in" }).finite().min(0, "Moet 0 of meer zijn"),
   protein_g: z.number({ error: "Vul een getal in" }).finite().min(0),
   carbs_g: z.number({ error: "Vul een getal in" }).finite().min(0),
@@ -19,11 +20,14 @@ export type NewFoodItemFormValues = z.infer<typeof schema>;
 
 export const EMPTY_NEW_FOOD_ITEM_VALUES: NewFoodItemFormValues = {
   name: "",
+  brand: null,
   calories_kcal: 0,
   protein_g: 0,
   carbs_g: 0,
   fat_g: 0,
 };
+
+const setValueAsNullableText = (raw: string) => (raw === "" ? null : raw);
 
 export function NewFoodItemForm({
   userId,
@@ -58,6 +62,8 @@ export function NewFoodItemForm({
       barcode: barcode ?? null,
       image_url: imageUrl,
       reference_grams: 100,
+      unit: "g",
+      serving_size: null,
       is_favorite: true,
     });
     reset(EMPTY_NEW_FOOD_ITEM_VALUES);
@@ -78,6 +84,15 @@ export function NewFoodItemForm({
         <Label htmlFor="name">Naam</Label>
         <Input id="name" placeholder="Bijv. skyr" {...register("name")} />
         <FieldError>{errors.name?.message}</FieldError>
+      </div>
+
+      <div>
+        <Label htmlFor="brand">Merk (optioneel)</Label>
+        <Input
+          id="brand"
+          placeholder="Bijv. Arla"
+          {...register("brand", { setValueAs: setValueAsNullableText })}
+        />
       </div>
 
       <div>

@@ -24,7 +24,7 @@ Dit document legt het Postgres/Supabase-datamodel uit. De uitvoerbare DDL staat 
 
 De opdracht noemde 9 categorieën; `correction_checkoffs`, `supplement_reminders`, `recipes` en `recipe_ingredients` zijn latere toevoegingen (zie onder).
 
-**Tijdstip van inname + herhaling horen bij het supplement, niet bij de herinnering.** `supplements` heeft één `intake_time` en één `recurrence_type` (`daily` / `every_n_days` met `recurrence_n` / `weekly` met `recurrence_weekday`, 0 = maandag) — dosis en een vrije tijdstip-tekst zijn eruit gehaald. `supplement_reminders` houdt tot 3 herinneringen per supplement bij (slot 1 verplicht in de UI, 2 en 3 optioneel), elk alleen een `minutes_before` (aantal minuten vóór `intake_time`; 0 = op het moment zelf). Dit is ook de tabel die straks een server-cron zou raadplegen voor echte push-meldingen.
+**Tijdstip van inname + herhaling horen bij het supplement, niet bij de herinnering.** `supplements` heeft één `intake_time`, één `recurrence_type` (`daily` / `every_n_days` met `recurrence_n` / `weekly` met `recurrence_weekday`, 0 = maandag) en een optionele `color` (vrij te kiezen hex, puur visueel — bv. om supplementen per innamemoment te groeperen) — dosis en een vrije tijdstip-tekst zijn eruit gehaald. `supplement_reminders` houdt tot 3 herinneringen per supplement bij (slot 1 verplicht in de UI, 2 en 3 optioneel), elk alleen een `offset_minutes` (minuten t.o.v. `intake_time`; negatief = ervoor, positief = erna, 0 = op het moment zelf). Dit is ook de tabel die de `/api/push/send-due`-route + pg_cron-job raadplegen voor echte Web Push-meldingen (zie onder).
 
 **Recepten rekenen per 100 gram.** Elk `recipe_ingredients`-item slaat zijn voedingswaarden per 100g op (net als Open Food Facts dat doet), plus hoeveel gram daadwerkelijk in het recept gaat. Zo kun je een ingrediënt (bv. bloem) aan meerdere recepten toevoegen met een andere hoeveelheid, en blijft opschalen naar het totale recept — of een deel daarvan — een simpele vermenigvuldiging. `food_items.reference_grams` (standaard 100) maakt het mogelijk om een bestaand, eerder handmatig ingevoerd product ook als ingrediënt te herschalen.
 
@@ -51,6 +51,14 @@ De opdracht noemde 9 categorieën; `correction_checkoffs`, `supplement_reminders
 - Zoeken op naam (in `/log/search` en bij het toevoegen van een receptingrediënt) combineert je eigen `food_items` met een tekst-zoekopdracht naar [search-a-licious](https://search.openfoodfacts.org) — Open Food Facts' v2/v3-API heeft geen full-text zoeken, en de oudere `/cgi/search.pl`-endpoint is niet meer bereikbaar.
 
 **Geen micronutriënten.** Die zaten er eerder in (10 losse kolommen per tabel + een koppeling vanuit supplementen), maar zijn volledig verwijderd: te veel ruis, en nooit overal even accuraat. Alleen de macro's (calorieën/eiwit/koolhydraten/vet/vezels) blijven — daar is Open Food Facts wél betrouwbaar in.
+
+**`food_items` heeft `brand`, `unit` (`g`/`ml`) en `serving_size`.** Merk komt uit Open Food Facts' `brands`-veld en is doorzoekbaar samen met de naam. `unit`/`serving_size` komen uit `serving_size`/`serving_quantity` (bv. "1 portie = 30g") en laten je bij het loggen kiezen tussen een handmatig aantal g/ml of een aantal porties — favorieten onthouden hun eigen eenheid en portiegrootte voor de volgende keer.
+
+**Favorieten-only: loggen slaat niet meer automatisch iets op.** Zie de eerdere migratie-toelichting in `schema.sql` — een gescand/gezocht product wordt alleen in `food_items` opgeslagen (en dus zichtbaar in "Favorieten") als je op het hartje tikt. Zonder favorieten wordt direct in `food_logs` gelogd, zonder `food_item_id`.
+
+**`food_logs` wordt na 3 dagen automatisch opgeruimd.** Een pg_cron-job (`purge-old-food-logs`, dagelijks) verwijdert `food_logs`-rijen met `log_date` ouder dan 3 dagen — alleen de streaks (`supplement_logs`) en de andere logs (water/gewicht/alcohol, nog in gebruik in Trends) blijven lang bewaard. Vooruitplannen kan tot `MAX_FUTURE_PLANNING_DAYS` (7 dagen, `lib/date.ts`).
+
+**Web Push draait op Supabase's eigen pg_cron, niet op Vercel of GitHub Actions.** Vercel Hobby staat cron niet vaker dan 1x/dag toe; GitHub Actions bleek in de praktijk te onbetrouwbaar op een 5-minuten-schema (soms 45+ minuten stil). Een pg_cron-job (`send-due-supplement-reminders`, elke minuut) roept via `pg_net` de route `/api/push/send-due` aan, die met de service-role key (bypast RLS) uitzoekt welke herinnering nu verstreken is en een echte Web Push stuurt (`push_subscriptions`) — werkt ook als de app dicht is. `sent_reminder_notifications` voorkomt dubbel versturen.
 
 ## Afbeeldingen
 

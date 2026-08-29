@@ -8,12 +8,17 @@
 export interface OpenFoodFactsProduct {
   barcode: string;
   name: string | null;
+  brand: string | null;
   imageUrl: string | null;
   caloriesKcal: number | null;
   proteinG: number | null;
   carbsG: number | null;
   fatG: number | null;
   fiberG: number | null;
+  /** Eenheid waarin de portiegrootte (en dus het loggen) getoond moet worden. */
+  unit: "g" | "ml";
+  /** Portiegrootte in `unit`, bv. 6 voor "1 portie = 6g" — null als OFF niets bruikbaars meegeeft. */
+  servingSize: number | null;
 }
 
 type NutrientMap = Record<string, number | string | undefined>;
@@ -25,11 +30,34 @@ function readMacro(nutriments: NutrientMap, key: string): number | null {
   return typeof value === "number" ? value : null;
 }
 
+/** Herkent "30 g", "250ml", "1 cookie (15 g)" e.d. — pakt het eerste getal+eenheid-paar. */
+function parseServingSize(text: string | undefined): { amount: number; unit: "g" | "ml" } | null {
+  if (!text) return null;
+  const match = text.match(/(\d+(?:[.,]\d+)?)\s*(ml|milliliter|millilitre|g|gram|grams?)\b/i);
+  if (!match) return null;
+  const amount = Number(match[1].replace(",", "."));
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const unit: "g" | "ml" = match[2].toLowerCase().startsWith("ml") || match[2].toLowerCase().startsWith("milli") ? "ml" : "g";
+  return { amount, unit };
+}
+
 function toProduct(barcode: string, product: Record<string, unknown>): OpenFoodFactsProduct {
   const nutriments = (product.nutriments ?? {}) as NutrientMap;
+  const brandsRaw = product.brands as string | undefined;
+  const brand = brandsRaw ? brandsRaw.split(",")[0]?.trim() || null : null;
+
+  const servingQuantity = Number(product.serving_quantity);
+  const servingSizeText = product.serving_size as string | undefined;
+  const parsedServing = parseServingSize(servingSizeText);
+  const serving =
+    Number.isFinite(servingQuantity) && servingQuantity > 0
+      ? { amount: servingQuantity, unit: parsedServing?.unit ?? "g" }
+      : parsedServing;
+
   return {
     barcode,
     name: (product.product_name || product.product_name_nl || product.generic_name || null) as string | null,
+    brand,
     imageUrl: (product.image_front_small_url || product.image_front_url || product.image_url || null) as
       | string
       | null,
@@ -38,6 +66,8 @@ function toProduct(barcode: string, product: Record<string, unknown>): OpenFoodF
     carbsG: readMacro(nutriments, "carbohydrates"),
     fatG: readMacro(nutriments, "fat"),
     fiberG: readMacro(nutriments, "fiber"),
+    unit: serving?.unit ?? "g",
+    servingSize: serving?.amount ?? null,
   };
 }
 

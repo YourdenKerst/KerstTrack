@@ -9,6 +9,8 @@ export type Sex = "male" | "female";
 
 export type RecurrenceType = "daily" | "every_n_days" | "weekly";
 
+export type Unit = "g" | "ml";
+
 export type Database = {
   public: {
     Tables: {
@@ -92,6 +94,7 @@ export type Database = {
           id: string;
           user_id: string;
           name: string;
+          brand: string | null;
           barcode: string | null;
           image_url: string | null;
           calories_kcal: number;
@@ -100,6 +103,8 @@ export type Database = {
           fat_g: number;
           fiber_g: number;
           reference_grams: number;
+          unit: Unit;
+          serving_size: number | null;
           is_favorite: boolean;
           created_at: string;
         };
@@ -107,6 +112,7 @@ export type Database = {
           id?: string;
           user_id: string;
           name: string;
+          brand?: string | null;
           barcode?: string | null;
           image_url?: string | null;
           calories_kcal: number;
@@ -115,6 +121,8 @@ export type Database = {
           fat_g?: number;
           fiber_g?: number;
           reference_grams?: number;
+          unit?: Unit;
+          serving_size?: number | null;
           is_favorite?: boolean;
           created_at?: string;
         };
@@ -122,6 +130,7 @@ export type Database = {
           id?: string;
           user_id?: string;
           name?: string;
+          brand?: string | null;
           barcode?: string | null;
           image_url?: string | null;
           calories_kcal?: number;
@@ -130,6 +139,8 @@ export type Database = {
           fat_g?: number;
           fiber_g?: number;
           reference_grams?: number;
+          unit?: Unit;
+          serving_size?: number | null;
           is_favorite?: boolean;
           created_at?: string;
         };
@@ -191,6 +202,7 @@ export type Database = {
           id: string;
           user_id: string;
           name: string;
+          color: string | null;
           intake_time: string;
           recurrence_type: RecurrenceType;
           recurrence_n: number | null;
@@ -203,6 +215,7 @@ export type Database = {
           id?: string;
           user_id: string;
           name: string;
+          color?: string | null;
           intake_time?: string;
           recurrence_type?: RecurrenceType;
           recurrence_n?: number | null;
@@ -215,6 +228,7 @@ export type Database = {
           id?: string;
           user_id?: string;
           name?: string;
+          color?: string | null;
           intake_time?: string;
           recurrence_type?: RecurrenceType;
           recurrence_n?: number | null;
@@ -231,21 +245,21 @@ export type Database = {
           user_id: string;
           supplement_id: string;
           slot: number;
-          minutes_before: number;
+          offset_minutes: number;
         };
         Insert: {
           id?: string;
           user_id: string;
           supplement_id: string;
           slot: number;
-          minutes_before?: number;
+          offset_minutes?: number;
         };
         Update: {
           id?: string;
           user_id?: string;
           supplement_id?: string;
           slot?: number;
-          minutes_before?: number;
+          offset_minutes?: number;
         };
         Relationships: [];
       };

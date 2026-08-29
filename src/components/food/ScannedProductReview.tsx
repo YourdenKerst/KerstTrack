@@ -5,6 +5,8 @@ import { useState } from "react";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { scaleProductToGrams, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
 
+type AmountMode = "manual" | "portions";
+
 export function ScannedProductReview({
   product,
   isFavorited,
@@ -15,10 +17,15 @@ export function ScannedProductReview({
   product: OpenFoodFactsProduct;
   isFavorited: boolean;
   onToggleFavorite: () => void;
-  onConfirm: (grams: number) => void;
+  onConfirm: (amount: number) => void;
   onCancel: () => void;
 }) {
-  const [grams, setGrams] = useState(100);
+  const hasServingSize = product.servingSize != null && product.servingSize > 0;
+  const [mode, setMode] = useState<AmountMode>(hasServingSize ? "portions" : "manual");
+  const [manualAmount, setManualAmount] = useState(100);
+  const [portionCount, setPortionCount] = useState(1);
+
+  const amount = mode === "portions" && hasServingSize ? (product.servingSize ?? 0) * portionCount : manualAmount;
 
   const scaled = scaleProductToGrams(
     {
@@ -27,7 +34,7 @@ export function ScannedProductReview({
       carbsG: product.carbsG,
       fatG: product.fatG,
     },
-    grams,
+    amount,
   );
 
   return (
@@ -43,7 +50,9 @@ export function ScannedProductReview({
         )}
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-foreground">{product.name ?? "Gescand product"}</h2>
-          <p className="text-xs text-muted-foreground">Gevonden via Open Food Facts — pas de hoeveelheid aan.</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {product.brand ? `${product.brand} · ` : ""}Gevonden via Open Food Facts
+          </p>
         </div>
         <button
           type="button"
@@ -55,18 +64,53 @@ export function ScannedProductReview({
         </button>
       </div>
 
-      <div>
-        <Label htmlFor="scan-grams">Hoeveelheid (g)</Label>
-        <Input
-          id="scan-grams"
-          type="number"
-          inputMode="decimal"
-          min={1}
-          step="any"
-          value={grams}
-          onChange={(e) => setGrams(Number(e.target.value) || 0)}
-        />
-      </div>
+      {hasServingSize && (
+        <div className="flex rounded-xl border border-border p-1 text-sm">
+          <button
+            type="button"
+            onClick={() => setMode("portions")}
+            className={`flex-1 rounded-lg py-1.5 font-medium transition-colors ${mode === "portions" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+          >
+            Porties
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("manual")}
+            className={`flex-1 rounded-lg py-1.5 font-medium transition-colors ${mode === "manual" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+          >
+            Handmatig
+          </button>
+        </div>
+      )}
+
+      {mode === "portions" && hasServingSize ? (
+        <div>
+          <Label htmlFor="scan-portions">Aantal porties (1 portie = {product.servingSize}{product.unit})</Label>
+          <Input
+            id="scan-portions"
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="any"
+            value={portionCount}
+            onChange={(e) => setPortionCount(Number(e.target.value) || 0)}
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">= {Math.round(amount)}{product.unit}</p>
+        </div>
+      ) : (
+        <div>
+          <Label htmlFor="scan-amount">Hoeveelheid ({product.unit})</Label>
+          <Input
+            id="scan-amount"
+            type="number"
+            inputMode="decimal"
+            min={1}
+            step="any"
+            value={manualAmount}
+            onChange={(e) => setManualAmount(Number(e.target.value) || 0)}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2 text-center text-xs">
         <div className="rounded-lg bg-surface-muted p-2">
@@ -84,7 +128,7 @@ export function ScannedProductReview({
       </div>
 
       <div className="flex gap-2">
-        <Button type="button" fullWidth onClick={() => onConfirm(grams)}>
+        <Button type="button" fullWidth onClick={() => onConfirm(amount)} disabled={amount <= 0}>
           Loggen
         </Button>
         <Button type="button" variant="ghost" onClick={onCancel}>

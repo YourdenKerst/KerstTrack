@@ -28,12 +28,13 @@ export function isSupplementDueOnDate(
 
 /**
  * Het kloktijdstip (HH:mm) waarop een herinnering moet afgaan: het tijdstip van
- * inname minus het aantal minuten vooraf, binnen dezelfde dag gewrapt (een
+ * inname plus een (mogelijk negatief) aantal minuten offset — negatief = ervoor,
+ * positief = erna, 0 = op het moment zelf — binnen dezelfde dag gewrapt (een
  * herinnering vlak na midnight vóór een vroege inname telt als "vandaag").
  */
-export function computeReminderClockTime(intakeTime: string, minutesBefore: number): string {
+export function computeReminderClockTime(intakeTime: string, offsetMinutes: number): string {
   const [h, m] = intakeTime.split(":").map(Number);
-  const totalMinutes = (((h * 60 + m - minutesBefore) % 1440) + 1440) % 1440;
+  const totalMinutes = (((h * 60 + m + offsetMinutes) % 1440) + 1440) % 1440;
   const hh = Math.floor(totalMinutes / 60);
   const mm = totalMinutes % 60;
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
@@ -54,7 +55,7 @@ export interface TodaysReminderEntry {
  */
 export function computeTodaysReminders(
   supplements: Pick<Supplement, "id" | "name" | "recurrence_type" | "recurrence_n" | "recurrence_weekday" | "intake_time">[],
-  reminders: Pick<SupplementReminder, "supplement_id" | "minutes_before">[],
+  reminders: Pick<SupplementReminder, "supplement_id" | "offset_minutes">[],
   checkedSupplementIds: Set<string>,
   todayISO: string,
   nowClockTime: string,
@@ -64,7 +65,7 @@ export function computeTodaysReminders(
     if (checkedSupplementIds.has(supplement.id)) continue;
     if (!isSupplementDueOnDate(supplement, todayISO)) continue;
     for (const reminder of reminders.filter((r) => r.supplement_id === supplement.id)) {
-      const clockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.minutes_before);
+      const clockTime = computeReminderClockTime(supplement.intake_time.slice(0, 5), reminder.offset_minutes);
       entries.push({
         supplementId: supplement.id,
         supplementName: supplement.name,

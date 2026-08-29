@@ -43,7 +43,7 @@ export function useAllSupplementReminders(userId: string) {
 
 export interface ReminderSlotInput {
   slot: number;
-  minutes_before: number;
+  offset_minutes: number;
 }
 
 /** Vervangt in één keer alle meldingsmomenten van een supplement (max. 3 slots). */

@@ -24,10 +24,15 @@ export function addDaysISO(dateISO: string, amount: number): string {
 }
 
 /** Hoeveel dagen vooruit je maaltijden mag voorplannen vanaf de dashboard-dagwisselaar. */
-export const MAX_FUTURE_PLANNING_DAYS = 3;
+export const MAX_FUTURE_PLANNING_DAYS = 7;
 
 export function isBeforeToday(dateISO: string): boolean {
   return dateISO < todayISO();
+}
+
+/** Terug naar het dashboard, op dezelfde dag als waarvoor je zat te loggen. */
+export function dashboardHref(dateISO: string): string {
+  return dateISO === todayISO() ? "/" : `/?date=${dateISO}`;
 }
 
 export function startOfWeekISO(dateISO: string): string {

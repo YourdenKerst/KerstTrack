@@ -5,13 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { BarcodeScanner } from "@/components/food/BarcodeScanner";
 import { ScannedProductReview } from "@/components/food/ScannedProductReview";
-import { todayISO } from "@/lib/date";
+import { dashboardHref, todayISO } from "@/lib/date";
 import { lookupBarcodeProduct, scaleProductToGrams, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
 import { useAddFoodItem, useFoodItems, useSetFoodItemFavorite, findFoodItemByBarcode } from "@/lib/queries/foodItems";
 import { useAddFoodLog, useLogFoodItem } from "@/lib/queries/foodLogs";
 import { useUserId } from "@/lib/user-context";
 
-type ScanStatus = "idle" | "looking-up" | "not-found" | "error" | "log-error" | "logged";
+type ScanStatus = "idle" | "looking-up" | "not-found" | "error" | "log-error";
 
 export default function ScanFoodPage() {
   return (
@@ -49,7 +49,7 @@ function ScanFoodPageContent() {
       const localMatch = await findFoodItemByBarcode(userId, barcode);
       if (localMatch) {
         await logFoodItem.mutateAsync({ item: localMatch, logDate: dateISO });
-        setStatus("logged");
+        router.push(dashboardHref(dateISO));
         return;
       }
 
@@ -75,6 +75,7 @@ function ScanFoodPageContent() {
     }
     const created = await addFoodItem.mutateAsync({
       name: scannedProduct.name ?? "Gescand product",
+      brand: scannedProduct.brand,
       barcode: scannedProduct.barcode,
       image_url: scannedProduct.imageUrl,
       calories_kcal: scannedProduct.caloriesKcal ?? 0,
@@ -83,17 +84,19 @@ function ScanFoodPageContent() {
       fat_g: scannedProduct.fatG ?? 0,
       fiber_g: scannedProduct.fiberG ?? 0,
       reference_grams: 100,
+      unit: scannedProduct.unit,
+      serving_size: scannedProduct.servingSize,
       is_favorite: true,
     });
     setSavedItemId(created.id);
   }
 
-  async function handleConfirm(grams: number) {
+  async function handleConfirm(amount: number) {
     if (!scannedProduct) return;
     try {
       const item = savedItemId ? (items ?? []).find((i) => i.id === savedItemId) : null;
       if (item) {
-        await logFoodItem.mutateAsync({ item, logDate: dateISO, grams });
+        await logFoodItem.mutateAsync({ item, logDate: dateISO, grams: amount });
       } else {
         const scaled = scaleProductToGrams(
           {
@@ -103,12 +106,12 @@ function ScanFoodPageContent() {
             fatG: scannedProduct.fatG ?? 0,
             fiberG: scannedProduct.fiberG ?? 0,
           },
-          grams,
+          amount,
         );
         await addFoodLog.mutateAsync({
           food_item_id: null,
           recipe_id: null,
-          name: scannedProduct.name ?? "Gescand product",
+          name: scannedProduct.brand ? `${scannedProduct.name} (${scannedProduct.brand})` : (scannedProduct.name ?? "Gescand product"),
           image_url: scannedProduct.imageUrl,
           ingredient_count: null,
           calories_kcal: scaled.caloriesKcal,
@@ -119,8 +122,7 @@ function ScanFoodPageContent() {
           log_date: dateISO,
         });
       }
-      setScannedProduct(null);
-      setStatus("logged");
+      router.push(dashboardHref(dateISO));
     } catch {
       setStatus("log-error");
     }
@@ -137,7 +139,7 @@ function ScanFoodPageContent() {
 
   return (
     <div className="space-y-4">
-      {!scannerOpen && status !== "logged" && !scannedProduct && (
+      {!scannerOpen && !scannedProduct && (
         <button
           type="button"
           onClick={reset}
@@ -152,15 +154,6 @@ function ScanFoodPageContent() {
         <p className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
           <Loader2 size={14} className="animate-spin" /> Opzoeken bij Open Food Facts…
         </p>
-      )}
-
-      {status === "logged" && (
-        <div className="space-y-3 py-6 text-center">
-          <p className="text-sm font-medium text-foreground">Gelogd!</p>
-          <button type="button" onClick={reset} className="text-sm font-medium text-primary hover:underline">
-            Nog een scannen
-          </button>
-        </div>
       )}
 
       {status === "not-found" && (

@@ -32,6 +32,7 @@ export function SupplementChecklist({ userId, dateISO }: { userId: string; dateI
               checked={checked}
               onToggle={() => toggle.mutate({ supplementId: s.id, logDate: dateISO, checked: !checked })}
               disabled={toggle.isPending}
+              color={s.color}
             />
           );
         })}

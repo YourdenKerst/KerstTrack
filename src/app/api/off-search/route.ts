@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     return Response.json({ hits: [] });
   }
 
-  const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&page_size=${limit}&fields=code,product_name,product_name_nl,generic_name,nutriments,image_front_small_url,image_front_url,image_url`;
+  const url = `https://search.openfoodfacts.org/search?q=${encodeURIComponent(query)}&page_size=${limit}&fields=code,product_name,product_name_nl,generic_name,brands,serving_size,serving_quantity,nutriments,image_front_small_url,image_front_url,image_url`;
 
   try {
     const response = await fetch(url, { headers: { "User-Agent": USER_AGENT } });

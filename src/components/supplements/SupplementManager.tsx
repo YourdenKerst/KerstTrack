@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RotateCcw, Trash2, X } from "lucide-react";
+import { Ban, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 import {
@@ -20,12 +20,16 @@ import type { RecurrenceType, Supplement } from "@/lib/types";
 export const WEEKDAY_LABELS = ["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"];
 
 const EVERY_N_DAYS_OPTIONS = [2, 3, 4];
-const MINUTES_BEFORE_OPTIONS = [0, 15, 30, 60, 120, 180];
+const OFFSET_OPTIONS = [-180, -120, -60, -30, -15, 0, 15, 30, 60, 120, 180];
+// Vrij te kiezen kleur om supplementen te groeperen, bv. per innamemoment
+// (ontbijt/lunch/diner) — puur visueel, geen vaste categorieën.
+const COLOR_PRESETS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899"];
 
-function minutesBeforeLabel(minutes: number): string {
+function offsetLabel(minutes: number): string {
   if (minutes === 0) return "Op het moment zelf";
-  if (minutes < 60) return `${minutes} minuten van tevoren`;
-  return `${minutes / 60} uur van tevoren`;
+  const abs = Math.abs(minutes);
+  const magnitude = abs < 60 ? `${abs} minuten` : `${abs / 60} uur`;
+  return minutes < 0 ? `${magnitude} ervoor` : `${magnitude} erna`;
 }
 
 function recurrenceLabel(
@@ -37,6 +41,7 @@ function recurrenceLabel(
 }
 
 interface ScheduleState {
+  color: string | null;
   intake_time: string;
   recurrence_type: RecurrenceType;
   recurrence_n: number | null;
@@ -44,11 +49,40 @@ interface ScheduleState {
 }
 
 function emptySchedule(): ScheduleState {
-  return { intake_time: "09:00", recurrence_type: "daily", recurrence_n: null, recurrence_weekday: null };
+  return { color: null, intake_time: "09:00", recurrence_type: "daily", recurrence_n: null, recurrence_weekday: null };
 }
 
 function emptySlot(slot: number): ReminderSlotInput {
-  return { slot, minutes_before: slot === 1 ? 0 : 60 };
+  return { slot, offset_minutes: slot === 1 ? 0 : 60 };
+}
+
+function ColorPicker({ value, onChange }: { value: string | null; onChange: (color: string | null) => void }) {
+  return (
+    <div>
+      <Label>Kleur (optioneel)</Label>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          aria-label="Geen kleur"
+          className="flex h-8 w-8 items-center justify-center rounded-full border-2 text-muted-foreground"
+          style={{ borderColor: value === null ? "var(--foreground)" : "var(--border)" }}
+        >
+          <Ban size={14} />
+        </button>
+        {COLOR_PRESETS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            onClick={() => onChange(color)}
+            aria-label={`Kleur ${color}`}
+            className="h-8 w-8 rounded-full border-2"
+            style={{ backgroundColor: color, borderColor: value === color ? "var(--foreground)" : "transparent" }}
+          />
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function IntakeScheduleFields({
@@ -59,7 +93,7 @@ function IntakeScheduleFields({
   onChange: (next: ScheduleState) => void;
 }) {
   return (
-    <div className="space-y-2 rounded-xl border border-border p-3">
+    <div className="space-y-3 rounded-xl border border-border p-3">
       <div className="grid grid-cols-2 gap-2">
         <div>
           <Label>Tijdstip van inname</Label>
@@ -111,6 +145,7 @@ function IntakeScheduleFields({
           </Select>
         </div>
       )}
+      <ColorPicker value={value.color} onChange={(color) => onChange({ ...value, color })} />
     </div>
   );
 }
@@ -122,8 +157,8 @@ function ReminderOffsetsEditor({
   slots: ReminderSlotInput[];
   onChange: (slots: ReminderSlotInput[]) => void;
 }) {
-  function updateSlot(index: number, minutes_before: number) {
-    onChange(slots.map((s, i) => (i === index ? { ...s, minutes_before } : s)));
+  function updateSlot(index: number, offset_minutes: number) {
+    onChange(slots.map((s, i) => (i === index ? { ...s, offset_minutes } : s)));
   }
 
   function removeSlot(index: number) {
@@ -136,13 +171,13 @@ function ReminderOffsetsEditor({
       {slots.map((slot, index) => (
         <div key={index} className="flex items-center gap-2">
           <Select
-            value={String(slot.minutes_before)}
+            value={String(slot.offset_minutes)}
             onChange={(e) => updateSlot(index, Number(e.target.value))}
             className="flex-1"
           >
-            {MINUTES_BEFORE_OPTIONS.map((minutes) => (
+            {OFFSET_OPTIONS.map((minutes) => (
               <option key={minutes} value={minutes}>
-                {minutesBeforeLabel(minutes)}
+                {offsetLabel(minutes)}
               </option>
             ))}
           </Select>
@@ -187,6 +222,7 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
   function startEditing() {
     setName(supplement.name);
     setSchedule({
+      color: supplement.color,
       intake_time: supplement.intake_time.slice(0, 5),
       recurrence_type: supplement.recurrence_type,
       recurrence_n: supplement.recurrence_n,
@@ -194,7 +230,7 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
     });
     setSlots(
       existingReminders && existingReminders.length > 0
-        ? existingReminders.map((r) => ({ slot: r.slot, minutes_before: r.minutes_before }))
+        ? existingReminders.map((r) => ({ slot: r.slot, offset_minutes: r.offset_minutes }))
         : [emptySlot(1)],
     );
     setEditing(true);
@@ -229,14 +265,19 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
 
   return (
     <div className="flex items-center justify-between gap-2 border-b border-border py-2.5 last:border-b-0">
-      <button type="button" onClick={startEditing} className="min-w-0 flex-1 text-left">
-        <p className="truncate text-sm font-medium text-foreground">{supplement.name}</p>
-        <p className="truncate text-xs text-muted-foreground">
-          {supplement.intake_time.slice(0, 5)} · {recurrenceLabel(supplement)}
-          {existingReminders && existingReminders.length > 0 && (
-            <> · {existingReminders.map((r) => minutesBeforeLabel(r.minutes_before)).join(" · ")}</>
-          )}
-        </p>
+      <button type="button" onClick={startEditing} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+        {supplement.color && (
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: supplement.color }} />
+        )}
+        <span className="min-w-0">
+          <p className="truncate text-sm font-medium text-foreground">{supplement.name}</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {supplement.intake_time.slice(0, 5)} · {recurrenceLabel(supplement)}
+            {existingReminders && existingReminders.length > 0 && (
+              <> · {existingReminders.map((r) => offsetLabel(r.offset_minutes)).join(" · ")}</>
+            )}
+          </p>
+        </span>
       </button>
       <button
         type="button"
