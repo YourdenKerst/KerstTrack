@@ -41,10 +41,24 @@ function parseServingSize(text: string | undefined): { amount: number; unit: "g"
   return { amount, unit };
 }
 
+/**
+ * `brands` is een komma-gescheiden string op de v2-productendpoint (barcode-
+ * opzoeken), maar een array op search-a-licious (naam-zoeken) — vandaar dat
+ * beide vormen hier afgehandeld worden i.p.v. alleen de string-vorm.
+ */
+function firstBrand(brands: unknown): string | null {
+  if (Array.isArray(brands)) {
+    return typeof brands[0] === "string" ? brands[0].trim() || null : null;
+  }
+  if (typeof brands === "string") {
+    return brands.split(",")[0]?.trim() || null;
+  }
+  return null;
+}
+
 function toProduct(barcode: string, product: Record<string, unknown>): OpenFoodFactsProduct {
   const nutriments = (product.nutriments ?? {}) as NutrientMap;
-  const brandsRaw = product.brands as string | undefined;
-  const brand = brandsRaw ? brandsRaw.split(",")[0]?.trim() || null : null;
+  const brand = firstBrand(product.brands);
 
   const servingQuantity = Number(product.serving_quantity);
   const servingSizeText = product.serving_size as string | undefined;
@@ -99,7 +113,20 @@ export async function searchProductsByName(query: string, limit = 15): Promise<O
 
     const data = await response.json();
     const hits = (data.hits ?? []) as Record<string, unknown>[];
-    return hits.filter((hit) => typeof hit.code === "string").map((hit) => toProduct(hit.code as string, hit));
+    // Eén onverwacht veld-formaat in één hit mag niet de hele zoekopdracht
+    // laten mislukken — zie de firstBrand-fix hierboven (search-a-licious
+    // gaf `brands` als array, .split() daarop gooide en de buitenste
+    // try/catch ving dat op als "niets gevonden").
+    const products: OpenFoodFactsProduct[] = [];
+    for (const hit of hits) {
+      if (typeof hit.code !== "string") continue;
+      try {
+        products.push(toProduct(hit.code, hit));
+      } catch {
+        // sla alleen deze ene hit over
+      }
+    }
+    return products;
   } catch {
     return [];
   }
