@@ -22,13 +22,11 @@ function MacroMini({
   return (
     <div className="flex flex-col items-center gap-1">
       <ProgressRing value={value} max={target} size={60} strokeWidth={7} color={color}>
-        <div className="flex flex-col items-center">
-          <span className="text-xs font-semibold text-foreground">{Math.round(value)}</span>
-          <span className="text-[9px] text-muted-foreground">{pct(value, target)}%</span>
-        </div>
+        <span className="text-xs font-semibold text-foreground">{pct(value, target)}%</span>
       </ProgressRing>
-      <span className="text-[11px] text-muted-foreground">
-        {label} <span className="text-muted-foreground/70">/{Math.round(target)}g</span>
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-[10px] text-muted-foreground/70">
+        {Math.round(value)}/{Math.round(target)}g
       </span>
     </div>
   );

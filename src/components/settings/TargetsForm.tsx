@@ -27,7 +27,6 @@ const schema = z.object({
   fat_g: nonNegative,
   fiber_g: nonNegative,
   water_ml: z.number({ error: "Vul een getal in" }).positive("Moet groter dan 0 zijn"),
-  alcohol_extra_water_ml: nonNegative,
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -180,7 +179,6 @@ export function TargetsForm({ userId }: { userId: string }) {
     register,
     handleSubmit,
     reset,
-    getValues,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({ resolver: zodResolver(schema) });
 
@@ -193,7 +191,6 @@ export function TargetsForm({ userId }: { userId: string }) {
         fat_g: targets.fat_g,
         fiber_g: targets.fiber_g,
         water_ml: targets.water_ml,
-        alcohol_extra_water_ml: targets.alcohol_extra_water_ml,
       });
     }
   }, [targets, reset]);
@@ -221,7 +218,13 @@ export function TargetsForm({ userId }: { userId: string }) {
       paceKgPerWeek: schedule.pace ?? undefined,
     });
 
-    reset({ ...recommended, alcohol_extra_water_ml: getValues("alcohol_extra_water_ml") ?? 500 });
+    // keepDefaultValues: zonder deze optie behandelt reset() de zojuist
+    // berekende waarden als de nieuwe "opgeslagen" staat, waardoor isDirty
+    // meteen weer false wordt en de Opslaan-knop uitgeschakeld blijft — ook
+    // al staat er niets van deze berekening in de database. Door de defaults
+    // op de oude (wél opgeslagen) targets te laten staan, ziet react-hook-form
+    // het verschil met de nieuwe waarden correct als een openstaande wijziging.
+    reset(recommended, { keepDefaultValues: true });
   }
 
   async function onSubmit(values: FormValues) {
@@ -264,16 +267,6 @@ export function TargetsForm({ userId }: { userId: string }) {
           <Input id="fiber_g" type="number" step="any" {...register("fiber_g", { valueAsNumber: true })} />
           <FieldError>{errors.fiber_g?.message}</FieldError>
         </div>
-      </div>
-      <div>
-        <Label htmlFor="alcohol_extra_water_ml">Extra water na een alcoholdag (ml)</Label>
-        <Input
-          id="alcohol_extra_water_ml"
-          type="number"
-          step="any"
-          {...register("alcohol_extra_water_ml", { valueAsNumber: true })}
-        />
-        <FieldError>{errors.alcohol_extra_water_ml?.message}</FieldError>
       </div>
 
       <Button type="submit" disabled={isSubmitting || !isDirty} fullWidth>

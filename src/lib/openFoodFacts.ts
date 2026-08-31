@@ -97,6 +97,26 @@ export async function lookupBarcodeProduct(barcode: string): Promise<OpenFoodFac
 }
 
 /**
+ * search-a-licious matcht met een "should" (OR) query over meerdere velden
+ * (naam, merk, categorie, ...) — een product dat alléén het merk matcht (niet
+ * de naam) kan zo alsnog hoog scoren, ook als het een compleet ander product
+ * is. Hertelt hier hoeveel losse zoektermen daadwerkelijk in naam+merk
+ * voorkomen (naam weegt zwaarder), filtert nul-scores eruit en sorteert op
+ * score — een simpele maar effectieve correctie zonder OFF's eigen ranking
+ * te hoeven vervangen.
+ */
+function relevanceScore(product: OpenFoodFactsProduct, queryTerms: string[]): number {
+  const nameLower = (product.name ?? "").toLowerCase();
+  const brandLower = (product.brand ?? "").toLowerCase();
+  let score = 0;
+  for (const term of queryTerms) {
+    if (nameLower.includes(term)) score += 2;
+    else if (brandLower.includes(term)) score += 1;
+  }
+  return score;
+}
+
+/**
  * Zoekt producten op naam. Loopt via onze eigen /api/off-search-route in
  * plaats van rechtstreeks search.openfoodfacts.org aan te roepen — die
  * stuurt geen Access-Control-Allow-Origin voor externe domeinen, dus een
@@ -106,9 +126,12 @@ export async function lookupBarcodeProduct(barcode: string): Promise<OpenFoodFac
 export async function searchProductsByName(query: string, limit = 15): Promise<OpenFoodFactsProduct[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
+  const queryTerms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
 
   try {
-    const response = await fetch(`/api/off-search?q=${encodeURIComponent(trimmed)}&limit=${limit}`);
+    // Vraag meer kandidaten op dan we tonen — geeft de relevantie-herordening
+    // hieronder iets om uit te kiezen i.p.v. alleen OFF's eigen top-N.
+    const response = await fetch(`/api/off-search?q=${encodeURIComponent(trimmed)}&limit=${limit * 3}`);
     if (!response.ok) return [];
 
     const data = await response.json();
@@ -126,7 +149,13 @@ export async function searchProductsByName(query: string, limit = 15): Promise<O
         // sla alleen deze ene hit over
       }
     }
-    return products;
+
+    return products
+      .map((product) => ({ product, score: relevanceScore(product, queryTerms) }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(({ product }) => product);
   } catch {
     return [];
   }

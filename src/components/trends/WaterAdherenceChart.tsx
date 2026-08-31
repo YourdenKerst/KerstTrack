@@ -3,22 +3,20 @@
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { computeWaterAdherence } from "@/lib/calculations/waterAdherence";
 import { formatShortDate } from "@/lib/date";
-import type { AlcoholLog, DailyTargets, WaterLog } from "@/lib/types";
+import type { DailyTargets, WaterLog } from "@/lib/types";
 
 export function WaterAdherenceChart({
   waterLogs,
-  alcoholLogs,
   targets,
   startISO,
   endISO,
 }: {
   waterLogs: WaterLog[];
-  alcoholLogs: AlcoholLog[];
   targets: DailyTargets;
   startISO: string;
   endISO: string;
 }) {
-  const data = computeWaterAdherence(waterLogs, alcoholLogs, targets, startISO, endISO);
+  const data = computeWaterAdherence(waterLogs, targets, startISO, endISO);
   const hasData = data.some((d) => d.totalMl > 0);
 
   if (!hasData) {
@@ -73,7 +71,7 @@ export function WaterAdherenceChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="mt-1 text-center text-[11px] text-muted-foreground">% van je (voor alcohol gecorrigeerde) waterdoel — stippellijn = 100%</p>
+      <p className="mt-1 text-center text-[11px] text-muted-foreground">% van je waterdoel — stippellijn = 100%</p>
 
       <details className="mt-3">
         <summary className="cursor-pointer text-xs text-muted-foreground">Toon als tabel</summary>

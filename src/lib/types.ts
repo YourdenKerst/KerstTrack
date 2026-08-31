@@ -3,8 +3,6 @@
 // met @supabase/postgrest-js' GenericSchema (zie SupabaseClient.ts) — we gebruiken
 // zelf geen embedded relaties of database-functies, dus die blijven leeg.
 
-export type TaskKey = "extra_water" | "extra_magnesium_food" | "extra_b_complex";
-
 export type Sex = "male" | "female";
 
 export type RecurrenceType = "daily" | "every_n_days" | "weekly";
@@ -62,7 +60,6 @@ export type Database = {
           fat_g: number;
           fiber_g: number;
           water_ml: number;
-          alcohol_extra_water_ml: number;
           updated_at: string;
         };
         Insert: {
@@ -73,7 +70,6 @@ export type Database = {
           fat_g: number;
           fiber_g: number;
           water_ml: number;
-          alcohol_extra_water_ml?: number;
           updated_at?: string;
         };
         Update: {
@@ -84,7 +80,6 @@ export type Database = {
           fat_g?: number;
           fiber_g?: number;
           water_ml?: number;
-          alcohol_extra_water_ml?: number;
           updated_at?: string;
         };
         Relationships: [];
@@ -155,6 +150,8 @@ export type Database = {
           name: string;
           image_url: string | null;
           ingredient_count: number | null;
+          amount: number | null;
+          unit: Unit;
           calories_kcal: number;
           protein_g: number;
           carbs_g: number;
@@ -171,6 +168,8 @@ export type Database = {
           name: string;
           image_url?: string | null;
           ingredient_count?: number | null;
+          amount?: number | null;
+          unit?: Unit;
           calories_kcal: number;
           protein_g?: number;
           carbs_g?: number;
@@ -187,6 +186,8 @@ export type Database = {
           name?: string;
           image_url?: string | null;
           ingredient_count?: number | null;
+          amount?: number | null;
+          unit?: Unit;
           calories_kcal?: number;
           protein_g?: number;
           carbs_g?: number;
@@ -202,6 +203,7 @@ export type Database = {
           id: string;
           user_id: string;
           name: string;
+          dose: string | null;
           color: string | null;
           intake_time: string;
           recurrence_type: RecurrenceType;
@@ -215,6 +217,7 @@ export type Database = {
           id?: string;
           user_id: string;
           name: string;
+          dose?: string | null;
           color?: string | null;
           intake_time?: string;
           recurrence_type?: RecurrenceType;
@@ -228,6 +231,7 @@ export type Database = {
           id?: string;
           user_id?: string;
           name?: string;
+          dose?: string | null;
           color?: string | null;
           intake_time?: string;
           recurrence_type?: RecurrenceType;
@@ -287,30 +291,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      correction_checkoffs: {
-        Row: {
-          id: string;
-          user_id: string;
-          log_date: string;
-          task_key: TaskKey;
-          checked_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          log_date: string;
-          task_key: TaskKey;
-          checked_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          log_date?: string;
-          task_key?: TaskKey;
-          checked_at?: string;
-        };
-        Relationships: [];
-      };
       water_logs: {
         Row: {
           id: string;
@@ -358,27 +338,6 @@ export type Database = {
           weight_kg?: number;
           log_date?: string;
           note?: string | null;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
-      alcohol_logs: {
-        Row: {
-          id: string;
-          user_id: string;
-          log_date: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          log_date: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          log_date?: string;
           created_at?: string;
         };
         Relationships: [];
@@ -526,10 +485,8 @@ export type FoodLog = PublicTables["food_logs"]["Row"];
 export type Supplement = PublicTables["supplements"]["Row"];
 export type SupplementReminder = PublicTables["supplement_reminders"]["Row"];
 export type SupplementLog = PublicTables["supplement_logs"]["Row"];
-export type CorrectionCheckoff = PublicTables["correction_checkoffs"]["Row"];
 export type WaterLog = PublicTables["water_logs"]["Row"];
 export type WeightLog = PublicTables["weight_logs"]["Row"];
-export type AlcoholLog = PublicTables["alcohol_logs"]["Row"];
 export type Recipe = PublicTables["recipes"]["Row"];
 export type RecipeIngredient = PublicTables["recipe_ingredients"]["Row"];
 export type PushSubscriptionRow = PublicTables["push_subscriptions"]["Row"];

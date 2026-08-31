@@ -114,6 +114,8 @@ function ScanFoodPageContent() {
           name: scannedProduct.brand ? `${scannedProduct.name} (${scannedProduct.brand})` : (scannedProduct.name ?? "Gescand product"),
           image_url: scannedProduct.imageUrl,
           ingredient_count: null,
+          amount,
+          unit: scannedProduct.unit,
           calories_kcal: scaled.caloriesKcal,
           protein_g: scaled.proteinG,
           carbs_g: scaled.carbsG,

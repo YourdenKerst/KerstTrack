@@ -1,6 +1,6 @@
 # Voedings- & Supplementtracker
 
-Persoonlijke installeerbare PWA om dagelijkse voeding, supplementen, water, gewicht en alcohol bij te houden tegen vaste doelen — inclusief een "weekendcorrectie"-checklist de dag na een gelogde alcoholdag, en een trends-pagina met grafieken.
+Persoonlijke installeerbare PWA om dagelijkse voeding, supplementen, water en gewicht bij te houden tegen vaste doelen, met een trends-pagina met grafieken.
 
 Gebouwd met Next.js (App Router) + TypeScript + Tailwind CSS + Supabase + Recharts.
 

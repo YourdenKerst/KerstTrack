@@ -31,7 +31,6 @@ create table if not exists public.daily_targets (
   fat_g numeric(6,1) not null,
   fiber_g numeric(6,1) not null,
   water_ml integer not null,
-  alcohol_extra_water_ml integer not null default 500,
   updated_at timestamptz not null default now()
 );
 
@@ -112,6 +111,10 @@ create table if not exists public.food_logs (
   name text not null,
   image_url text,
   ingredient_count integer,
+  -- Hoeveel gram/ml dit precies was — nodig om de hoeveelheid achteraf aan te
+  -- kunnen passen (herschaalt calories_kcal/protein_g/... proportioneel).
+  amount numeric(7,1),
+  unit text not null default 'g' check (unit in ('g', 'ml')),
   calories_kcal numeric(6,1) not null,
   protein_g numeric(6,1) not null default 0,
   carbs_g numeric(6,1) not null default 0,
@@ -129,6 +132,8 @@ create table if not exists public.supplements (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  -- Vrije tekst, optioneel (bv. "2 capsules" / "500mg") — puur informatief.
+  dose text,
   -- Vrij te kiezen kleur (hex) om supplementen visueel te groeperen, bv. per
   -- innamemoment (ontbijt/lunch/diner) — puur cosmetisch, geen vaste opties.
   color text,
@@ -175,20 +180,7 @@ create table if not exists public.supplement_logs (
 create index if not exists supplement_logs_user_date_idx on public.supplement_logs(user_id, log_date);
 
 -- =========================================================
--- 9. correction_checkoffs — de 3 weekendcorrectie-taken, los van het vaste schema
--- =========================================================
-create table if not exists public.correction_checkoffs (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  log_date date not null,
-  task_key text not null check (task_key in ('extra_water', 'extra_magnesium_food', 'extra_b_complex')),
-  checked_at timestamptz not null default now(),
-  unique (user_id, log_date, task_key)
-);
-create index if not exists correction_checkoffs_user_date_idx on public.correction_checkoffs(user_id, log_date);
-
--- =========================================================
--- 10. water_logs — elke toevoeging is een eigen rij, dagtotaal = som
+-- 9. water_logs — elke toevoeging is een eigen rij, dagtotaal = som
 -- =========================================================
 create table if not exists public.water_logs (
   id uuid primary key default gen_random_uuid(),
@@ -200,7 +192,7 @@ create table if not exists public.water_logs (
 create index if not exists water_logs_user_date_idx on public.water_logs(user_id, log_date);
 
 -- =========================================================
--- 11. weight_logs — 1 log per dag (upsert bij dubbel loggen)
+-- 10. weight_logs — 1 log per dag (upsert bij dubbel loggen)
 -- =========================================================
 create table if not exists public.weight_logs (
   id uuid primary key default gen_random_uuid(),
@@ -214,18 +206,6 @@ create table if not exists public.weight_logs (
 create index if not exists weight_logs_user_date_idx on public.weight_logs(user_id, log_date);
 
 -- =========================================================
--- 12. alcohol_logs — bestaan van de rij = alcohol die dag
--- =========================================================
-create table if not exists public.alcohol_logs (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  log_date date not null,
-  created_at timestamptz not null default now(),
-  unique (user_id, log_date)
-);
-create index if not exists alcohol_logs_user_date_idx on public.alcohol_logs(user_id, log_date);
-
--- =========================================================
 -- Row Level Security — elke tabel alleen leesbaar/schrijfbaar door de eigenaar
 -- =========================================================
 alter table public.profiles enable row level security;
@@ -235,10 +215,8 @@ alter table public.food_logs enable row level security;
 alter table public.supplements enable row level security;
 alter table public.supplement_reminders enable row level security;
 alter table public.supplement_logs enable row level security;
-alter table public.correction_checkoffs enable row level security;
 alter table public.water_logs enable row level security;
 alter table public.weight_logs enable row level security;
-alter table public.alcohol_logs enable row level security;
 alter table public.recipes enable row level security;
 alter table public.recipe_ingredients enable row level security;
 
@@ -263,17 +241,11 @@ create policy "supplement_reminders_self" on public.supplement_reminders for all
 drop policy if exists "supplement_logs_self" on public.supplement_logs;
 create policy "supplement_logs_self" on public.supplement_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
-drop policy if exists "correction_checkoffs_self" on public.correction_checkoffs;
-create policy "correction_checkoffs_self" on public.correction_checkoffs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
 drop policy if exists "water_logs_self" on public.water_logs;
 create policy "water_logs_self" on public.water_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "weight_logs_self" on public.weight_logs;
 create policy "weight_logs_self" on public.weight_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-drop policy if exists "alcohol_logs_self" on public.alcohol_logs;
-create policy "alcohol_logs_self" on public.alcohol_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "recipes_self" on public.recipes;
 create policy "recipes_self" on public.recipes for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -592,7 +564,7 @@ alter table public.food_items add column if not exists serving_size numeric(7,2)
 -- =========================================================
 -- Migratie: bewaartermijn. Voeding (food_logs) wordt na 3 dagen automatisch
 -- opgeruimd — alleen de streaks (supplement_logs) en de andere logs
--- (water/gewicht/alcohol, nog steeds gebruikt in Trends) blijven lang bewaard.
+-- (water/gewicht, nog steeds gebruikt in Trends) blijven lang bewaard.
 -- Draait dagelijks via pg_cron (zelfde mechanisme als de reminder-cron).
 -- =========================================================
 select cron.schedule(
@@ -600,3 +572,37 @@ select cron.schedule(
   '30 2 * * *',
   $$ delete from public.food_logs where log_date < (current_date - interval '3 days'); $$
 ) where not exists (select 1 from cron.job where jobname = 'purge-old-food-logs');
+
+-- =========================================================
+-- Migratie: supplement-streaks bewaren max. 3 maanden (zie ook de eigen
+-- periodefilter per tabel in Trends — "Alles" is daar begrensd tot 3 maanden
+-- omdat er nooit meer dan dat bestaat).
+-- =========================================================
+select cron.schedule(
+  'purge-old-supplement-logs',
+  '45 2 * * *',
+  $$ delete from public.supplement_logs where log_date < (current_date - interval '3 months'); $$
+) where not exists (select 1 from cron.job where jobname = 'purge-old-supplement-logs');
+
+-- =========================================================
+-- Migratie: alcohol-tracking en de weekendcorrectie-checklist zijn volledig
+-- verwijderd (nooit gebruikt zoals bedoeld) — inclusief het bijbehorende extra
+-- waterdoel. Voeding aanpassen achteraf (amount/unit) en een optioneel
+-- dosis-veld bij supplementen komen ervoor in de plaats.
+-- =========================================================
+drop table if exists public.correction_checkoffs;
+drop table if exists public.alcohol_logs;
+alter table public.daily_targets drop column if exists alcohol_extra_water_ml;
+
+alter table public.food_logs add column if not exists amount numeric(7,1);
+alter table public.food_logs add column if not exists unit text not null default 'g';
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'food_logs_unit_check'
+  ) then
+    alter table public.food_logs add constraint food_logs_unit_check check (unit in ('g', 'ml'));
+  end if;
+end $$;
+
+alter table public.supplements add column if not exists dose text;

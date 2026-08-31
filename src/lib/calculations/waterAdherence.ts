@@ -1,5 +1,5 @@
-import { addDaysISO, dateRangeISO } from "@/lib/date";
-import type { AlcoholLog, DailyTargets, WaterLog } from "@/lib/types";
+import { dateRangeISO } from "@/lib/date";
+import type { DailyTargets, WaterLog } from "@/lib/types";
 
 export interface WaterAdherencePoint {
   date: string;
@@ -10,7 +10,6 @@ export interface WaterAdherencePoint {
 
 export function computeWaterAdherence(
   waterLogs: WaterLog[],
-  alcoholLogs: AlcoholLog[],
   targets: DailyTargets,
   startISO: string,
   endISO: string,
@@ -19,11 +18,9 @@ export function computeWaterAdherence(
   for (const log of waterLogs) {
     totalByDate.set(log.log_date, (totalByDate.get(log.log_date) ?? 0) + log.amount_ml);
   }
-  const alcoholDates = new Set(alcoholLogs.map((l) => l.log_date));
 
   return dateRangeISO(startISO, endISO).map((date) => {
-    const correctionActive = alcoholDates.has(addDaysISO(date, -1));
-    const targetMl = targets.water_ml + (correctionActive ? targets.alcohol_extra_water_ml : 0);
+    const targetMl = targets.water_ml;
     const totalMl = totalByDate.get(date) ?? 0;
     return {
       date,

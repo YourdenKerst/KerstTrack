@@ -65,7 +65,7 @@ export function useAddFoodLog(userId: string) {
 
 /**
  * Logt een opgeslagen product, herschaald naar een opgegeven hoeveelheid in
- * gram (t.o.v. het item's `reference_grams`). Zonder `grams` wordt het item
+ * gram/ml (t.o.v. het item's `reference_grams`). Zonder `grams` wordt het item
  * exact zo gelogd als opgeslagen.
  */
 export function useLogFoodItem(userId: string) {
@@ -73,12 +73,15 @@ export function useLogFoodItem(userId: string) {
   return useMutation({
     mutationFn: async ({ item, logDate, grams }: { item: FoodItem; logDate: string; grams?: number }) => {
       const supabase = createClient();
-      const factor = grams != null ? grams / item.reference_grams : 1;
+      const amount = grams ?? item.reference_grams;
+      const factor = amount / item.reference_grams;
       const { error } = await supabase.from("food_logs").insert({
         user_id: userId,
         food_item_id: item.id,
         name: item.name,
         image_url: item.image_url,
+        amount,
+        unit: item.unit,
         calories_kcal: Math.round(item.calories_kcal * factor * 100) / 100,
         protein_g: Math.round(item.protein_g * factor * 100) / 100,
         carbs_g: Math.round(item.carbs_g * factor * 100) / 100,
@@ -90,6 +93,34 @@ export function useLogFoodItem(userId: string) {
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: foodLogsDateKey(userId, variables.logDate) });
+    },
+  });
+}
+
+/** Herschaalt een bestaande log naar een nieuwe hoeveelheid (achteraf aanpassen vanuit "Vandaag gegeten"). */
+export function useUpdateFoodLogAmount(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ log, newAmount }: { log: FoodLog; newAmount: number }) => {
+      if (!log.amount || log.amount <= 0) throw new Error("Geen basis-hoeveelheid bekend voor deze log.");
+      const factor = newAmount / log.amount;
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("food_logs")
+        .update({
+          amount: newAmount,
+          calories_kcal: Math.round(log.calories_kcal * factor * 100) / 100,
+          protein_g: Math.round(log.protein_g * factor * 100) / 100,
+          carbs_g: Math.round(log.carbs_g * factor * 100) / 100,
+          fat_g: Math.round(log.fat_g * factor * 100) / 100,
+          fiber_g: Math.round(log.fiber_g * factor * 100) / 100,
+        })
+        .eq("id", log.id)
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: foodLogsDateKey(userId, variables.log.log_date) });
     },
   });
 }

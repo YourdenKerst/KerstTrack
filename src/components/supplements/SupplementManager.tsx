@@ -216,11 +216,13 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
   const { data: existingReminders } = useSupplementReminders(supplement.id);
 
   const [name, setName] = useState(supplement.name);
+  const [dose, setDose] = useState<string | null>(supplement.dose);
   const [schedule, setSchedule] = useState<ScheduleState>(emptySchedule());
   const [slots, setSlots] = useState<ReminderSlotInput[]>([emptySlot(1)]);
 
   function startEditing() {
     setName(supplement.name);
+    setDose(supplement.dose);
     setSchedule({
       color: supplement.color,
       intake_time: supplement.intake_time.slice(0, 5),
@@ -237,7 +239,7 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
   }
 
   async function handleSave() {
-    await update.mutateAsync({ id: supplement.id, name, ...schedule });
+    await update.mutateAsync({ id: supplement.id, name, dose, ...schedule });
     await setReminders.mutateAsync({ supplementId: supplement.id, slots });
     setEditing(false);
   }
@@ -248,6 +250,14 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
         <div>
           <Label>Naam</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <Label>Hoeveelheid (optioneel)</Label>
+          <Input
+            placeholder="Bijv. 2 capsules of 500mg"
+            value={dose ?? ""}
+            onChange={(e) => setDose(e.target.value === "" ? null : e.target.value)}
+          />
         </div>
         <IntakeScheduleFields value={schedule} onChange={setSchedule} />
         <ReminderOffsetsEditor slots={slots} onChange={setSlots} />
@@ -270,7 +280,10 @@ function SupplementRow({ userId, supplement }: { userId: string; supplement: Sup
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: supplement.color }} />
         )}
         <span className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">{supplement.name}</p>
+          <p className="truncate text-sm font-medium text-foreground">
+            {supplement.name}
+            {supplement.dose && <span className="font-normal text-muted-foreground"> · {supplement.dose}</span>}
+          </p>
           <p className="truncate text-xs text-muted-foreground">
             {supplement.intake_time.slice(0, 5)} · {recurrenceLabel(supplement)}
             {existingReminders && existingReminders.length > 0 && (
@@ -299,6 +312,7 @@ export function SupplementManager({ userId }: { userId: string }) {
   const hardDelete = useDeleteSupplementPermanently(userId);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
+  const [newDose, setNewDose] = useState<string | null>(null);
   const [newSchedule, setNewSchedule] = useState<ScheduleState>(emptySchedule());
   const [newSlots, setNewSlots] = useState<ReminderSlotInput[]>([emptySlot(1)]);
   const [saving, setSaving] = useState(false);
@@ -312,11 +326,13 @@ export function SupplementManager({ userId }: { userId: string }) {
     try {
       const supplement = await addSupplement.mutateAsync({
         name: newName.trim(),
+        dose: newDose,
         sort_order: active.length,
         ...newSchedule,
       });
       await setReminders.mutateAsync({ supplementId: supplement.id, slots: newSlots });
       setNewName("");
+      setNewDose(null);
       setNewSchedule(emptySchedule());
       setNewSlots([emptySlot(1)]);
       setShowAddForm(false);
@@ -373,6 +389,14 @@ export function SupplementManager({ userId }: { userId: string }) {
           <div>
             <Label>Naam</Label>
             <Input placeholder="Bijv. Omega-3" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Hoeveelheid (optioneel)</Label>
+            <Input
+              placeholder="Bijv. 2 capsules of 500mg"
+              value={newDose ?? ""}
+              onChange={(e) => setNewDose(e.target.value === "" ? null : e.target.value)}
+            />
           </div>
           <IntakeScheduleFields value={newSchedule} onChange={setNewSchedule} />
           <ReminderOffsetsEditor slots={newSlots} onChange={setNewSlots} />

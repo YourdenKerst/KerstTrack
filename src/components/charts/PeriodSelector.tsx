@@ -13,7 +13,7 @@ export function PeriodSelector({
   options: { value: Period; label: string }[];
 }) {
   return (
-    <div className="flex gap-1 rounded-xl bg-surface p-1">
+    <div className="flex gap-1 rounded-xl bg-surface-muted p-1">
       {options.map((opt) => (
         <button
           key={opt.value}

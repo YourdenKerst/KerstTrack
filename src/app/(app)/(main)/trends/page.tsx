@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { AlcoholCorrelationCards } from "@/components/trends/AlcoholCorrelationCards";
 import { StreakCalendar } from "@/components/trends/StreakCalendar";
 import { WaterAdherenceChart } from "@/components/trends/WaterAdherenceChart";
 import { WeightChart } from "@/components/weight/WeightChart";
 import { PeriodSelector } from "@/components/charts/PeriodSelector";
 import { Card } from "@/components/ui";
-import { addDaysISO, periodStartISO, todayISO, type Period } from "@/lib/date";
-import { useAlcoholLogsForRange } from "@/lib/queries/alcoholLogs";
+import { periodStartISO, todayISO, type Period } from "@/lib/date";
 import { useDailyTargets } from "@/lib/queries/dailyTargets";
 import { useSupplements } from "@/lib/queries/supplements";
 import { useSupplementLogsForRange } from "@/lib/queries/supplementLogs";
@@ -23,23 +21,78 @@ const PERIOD_OPTIONS: { value: Period; label: string }[] = [
   { value: "all", label: "Alles" },
 ];
 
-export default function TrendsPage() {
-  const userId = useUserId();
+function WeightTrendCard({ userId }: { userId: string }) {
   const [period, setPeriod] = useState<Period>("30d");
   const today = todayISO();
   const start = periodStartISO(period);
-  const lookbackStart = addDaysISO(start, -1);
-
-  const { data: targets } = useDailyTargets(userId);
   const { data: weightLogs } = useWeightLogsForRange(userId, start, today);
+
+  return (
+    <Card>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-foreground">Gewicht over tijd</h2>
+      </div>
+      <PeriodSelector value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+      <div className="mt-3">
+        <WeightChart logs={weightLogs ?? []} />
+      </div>
+    </Card>
+  );
+}
+
+function WaterTrendCard({ userId }: { userId: string }) {
+  const [period, setPeriod] = useState<Period>("30d");
+  const today = todayISO();
+  const start = periodStartISO(period);
+  const { data: targets } = useDailyTargets(userId);
+  const { data: waterLogs } = useWaterLogsForRange(userId, start, today);
+
+  if (!targets) return null;
+
+  return (
+    <Card>
+      <h2 className="mb-2 text-sm font-semibold text-foreground">Water-adherence</h2>
+      <PeriodSelector value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
+      <div className="mt-3">
+        <WaterAdherenceChart waterLogs={waterLogs ?? []} targets={targets} startISO={start} endISO={today} />
+      </div>
+    </Card>
+  );
+}
+
+// Supplement-checkoffs worden na 3 maanden opgeruimd (zie schema.sql) — "Alles"
+// levert hier dus in de praktijk hetzelfde op als "90 dagen".
+const SUPPLEMENT_PERIOD_OPTIONS: { value: Period; label: string }[] = [
+  { value: "7d", label: "7 dagen" },
+  { value: "30d", label: "30 dagen" },
+  { value: "90d", label: "3 maanden" },
+];
+
+function SupplementStreakCard({ userId }: { userId: string }) {
+  const [period, setPeriod] = useState<Period>("30d");
+  const today = todayISO();
+  const start = periodStartISO(period);
   const { data: supplements } = useSupplements(userId);
   const { data: supplementLogs } = useSupplementLogsForRange(userId, start, today);
-  const { data: waterLogs } = useWaterLogsForRange(userId, start, today);
-  const { data: alcoholLogs } = useAlcoholLogsForRange(userId, lookbackStart, today);
 
-  if (!targets) {
-    return <div className="p-6 text-center text-sm text-muted-foreground">Laden…</div>;
-  }
+  return (
+    <Card>
+      <h2 className="mb-2 text-sm font-semibold text-foreground">Supplement-streaks</h2>
+      <PeriodSelector value={period} onChange={setPeriod} options={SUPPLEMENT_PERIOD_OPTIONS} />
+      <div className="mt-3">
+        <StreakCalendar
+          logs={supplementLogs ?? []}
+          totalActiveSupplements={supplements?.length ?? 0}
+          startISO={start}
+          endISO={today}
+        />
+      </div>
+    </Card>
+  );
+}
+
+export default function TrendsPage() {
+  const userId = useUserId();
 
   return (
     <div className="space-y-4 px-4 pt-6">
@@ -47,46 +100,9 @@ export default function TrendsPage() {
         <h1 className="text-xl font-semibold text-foreground">Trends</h1>
       </header>
 
-      <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-3">
-        <p className="mb-2 text-xs font-medium text-foreground">Periode</p>
-        <PeriodSelector value={period} onChange={setPeriod} options={PERIOD_OPTIONS} />
-      </div>
-
-      <Card>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Gewicht over tijd</h2>
-        <WeightChart logs={weightLogs ?? []} />
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Water-adherence</h2>
-        <WaterAdherenceChart
-          waterLogs={waterLogs ?? []}
-          alcoholLogs={alcoholLogs ?? []}
-          targets={targets}
-          startISO={start}
-          endISO={today}
-        />
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Supplement-streaks</h2>
-        <StreakCalendar
-          logs={supplementLogs ?? []}
-          totalActiveSupplements={supplements?.length ?? 0}
-          startISO={start}
-          endISO={today}
-        />
-      </Card>
-
-      <Card>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">Alcohol-correlatie</h2>
-        <AlcoholCorrelationCards
-          weightLogs={weightLogs ?? []}
-          alcoholLogs={alcoholLogs ?? []}
-          startISO={start}
-          endISO={today}
-        />
-      </Card>
+      <WeightTrendCard userId={userId} />
+      <WaterTrendCard userId={userId} />
+      <SupplementStreakCard userId={userId} />
     </div>
   );
 }

@@ -147,6 +147,8 @@ function SearchFoodPageContent() {
           name: product.brand ? `${product.name} (${product.brand})` : (product.name ?? "Product"),
           image_url: product.imageUrl,
           ingredient_count: null,
+          amount,
+          unit: product.unit,
           calories_kcal: scaled.caloriesKcal,
           protein_g: scaled.proteinG,
           carbs_g: scaled.carbsG,
@@ -210,18 +212,18 @@ function SearchFoodPageContent() {
                 >
                   {item.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element -- eigen/OFF-afbeelding, geen build-time optimalisatie nodig
-                    <img src={item.image_url} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover" />
+                    <img src={item.image_url} alt="" className="h-16 w-16 shrink-0 rounded-xl border border-border object-cover" />
                   ) : (
-                    <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-muted" />
+                    <div className="h-16 w-16 shrink-0 rounded-xl bg-surface-muted" />
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">
-                      {item.name}
-                      {item.brand && <span className="font-normal text-muted-foreground"> · {item.brand}</span>}
+                    <span className="block truncate text-sm font-medium text-foreground">{item.name}</span>
+                    {item.brand && <span className="block truncate text-xs text-muted-foreground">{item.brand}</span>}
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      {Math.round(item.calories_kcal)} kcal/100{item.unit}
                     </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {Math.round(item.calories_kcal)} kcal · {Math.round(item.protein_g)}p / {Math.round(item.carbs_g)}k /{" "}
-                      {Math.round(item.fat_g)}v
+                    <span className="block text-[11px] text-muted-foreground">
+                      E {Math.round(item.protein_g)}g · K {Math.round(item.carbs_g)}g · V {Math.round(item.fat_g)}g
                     </span>
                   </span>
                 </button>
@@ -270,17 +272,21 @@ function SearchFoodPageContent() {
                   >
                     {product.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element -- extern OFF-domein, geen build-time optimalisatie nodig
-                      <img src={product.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover" />
+                      <img src={product.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl border border-border object-cover" />
                     ) : (
-                      <div className="h-10 w-10 shrink-0 rounded-lg bg-surface-muted" />
+                      <div className="h-16 w-16 shrink-0 rounded-xl bg-surface-muted" />
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-foreground">
                         {product.name ?? "Onbekend product"}
-                        {product.brand && <span className="font-normal text-muted-foreground"> · {product.brand}</span>}
                       </span>
-                      <span className="block text-xs text-muted-foreground">
+                      {product.brand && <span className="block truncate text-xs text-muted-foreground">{product.brand}</span>}
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
                         {Math.round(product.caloriesKcal ?? 0)} kcal/100{product.unit}
+                      </span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        E {Math.round(product.proteinG ?? 0)}g · K {Math.round(product.carbsG ?? 0)}g · V{" "}
+                        {Math.round(product.fatG ?? 0)}g
                       </span>
                     </span>
                   </button>

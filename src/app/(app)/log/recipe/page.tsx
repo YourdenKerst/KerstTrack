@@ -109,6 +109,8 @@ function RecipeRow({
       image_url: imageUrl,
       recipe_id: recipeId,
       ingredient_count: ingredients.length,
+      amount,
+      unit: "g",
       log_date: dateISO,
       food_item_id: null,
     });

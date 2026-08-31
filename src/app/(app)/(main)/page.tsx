@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { Card } from "@/components/ui";
-import { CorrectionBanner } from "@/components/dashboard/CorrectionBanner";
 import { DaySwitcher } from "@/components/dashboard/DaySwitcher";
 import { MacroRings } from "@/components/dashboard/MacroRings";
 import { SupplementChecklist } from "@/components/dashboard/SupplementChecklist";
@@ -15,7 +14,7 @@ import { TodayFoodList } from "@/components/food/TodayFoodList";
 import { sumMacros } from "@/lib/calculations/nutrition";
 import type { GoalPlan } from "@/lib/calculations/recommendedTargets";
 import { addDaysISO, formatFullDate, MAX_FUTURE_PLANNING_DAYS, todayISO } from "@/lib/date";
-import { useEffectiveWaterTarget } from "@/lib/hooks/useEffectiveWaterTarget";
+import { useDailyTargets } from "@/lib/queries/dailyTargets";
 import { useFoodLogsForDate } from "@/lib/queries/foodLogs";
 import { useProfile } from "@/lib/queries/profiles";
 import { useWaterLogsForDate } from "@/lib/queries/waterLogs";
@@ -51,7 +50,7 @@ function DashboardPageContent() {
   }
 
   const { data: profile } = useProfile(userId);
-  const { targets, correctionActive, waterTarget } = useEffectiveWaterTarget(userId, selectedDate);
+  const { data: targets } = useDailyTargets(userId);
   const { data: foodLogs } = useFoodLogsForDate(userId, selectedDate);
   const { data: waterLogs } = useWaterLogsForDate(userId, selectedDate);
 
@@ -77,8 +76,6 @@ function DashboardPageContent() {
         <p className="text-center text-xs capitalize text-muted-foreground">{formatFullDate(selectedDate)}</p>
       </header>
 
-      {correctionActive && <CorrectionBanner userId={userId} dateISO={selectedDate} />}
-
       <MacroRings totals={totals} targets={targets}>
         <Link
           href={selectedDate === today ? "/log" : `/log?date=${selectedDate}`}
@@ -88,7 +85,7 @@ function DashboardPageContent() {
         </Link>
       </MacroRings>
 
-      <WaterBlock userId={userId} dateISO={selectedDate} waterMl={waterMl} waterTarget={waterTarget} />
+      <WaterBlock userId={userId} dateISO={selectedDate} waterMl={waterMl} waterTarget={targets.water_ml} />
 
       <TodayFoodList userId={userId} dateISO={selectedDate} />
 

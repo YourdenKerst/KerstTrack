@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
+import { profileKey } from "@/lib/queries/profiles";
 import type { WeightLog } from "@/lib/types";
 
 export function weightLogsRecentKey(userId: string, limit: number) {
@@ -69,9 +70,28 @@ export function useUpsertWeightLog(userId: string) {
           { onConflict: "user_id,log_date" },
         );
       if (error) throw error;
+
+      // Houd profiles.weight_kg gelijk aan de meest recente log (niet per se
+      // déze log — je kunt ook een oudere datum aanvullen), zodat de
+      // BMR-berekening in Profielinstellingen altijd met je actuele gewicht
+      // rekent zonder dat je het daar apart hoeft bij te werken.
+      const { data: latest } = await supabase
+        .from("weight_logs")
+        .select("weight_kg, log_date")
+        .eq("user_id", userId)
+        .order("log_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latest) {
+        await supabase
+          .from("profiles")
+          .update({ weight_kg: latest.weight_kg, updated_at: new Date().toISOString() })
+          .eq("id", userId);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["weight_logs", userId] });
+      queryClient.invalidateQueries({ queryKey: profileKey(userId) });
     },
   });
 }

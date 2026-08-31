@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { NewFoodItemForm } from "@/components/food/NewFoodItemForm";
+import { todayISO } from "@/lib/date";
 import { useUserId } from "@/lib/user-context";
 
 export default function NewFoodPage() {
@@ -17,6 +18,7 @@ function NewFoodPageContent() {
   const userId = useUserId();
   const searchParams = useSearchParams();
   const barcode = searchParams.get("barcode");
+  const dateISO = searchParams.get("date") ?? todayISO();
 
   return (
     <div className="space-y-3">
@@ -24,6 +26,7 @@ function NewFoodPageContent() {
       <NewFoodItemForm
         userId={userId}
         barcode={barcode}
+        dateISO={dateISO}
         disclaimer={barcode ? "Niet gevonden via de streepjescode — vul de waarden handmatig in." : undefined}
       />
     </div>

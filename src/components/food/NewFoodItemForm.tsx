@@ -1,10 +1,12 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button, FieldError, ImageUploadField, Input, Label } from "@/components/ui";
+import { dashboardHref } from "@/lib/date";
 import { useAddFoodItem } from "@/lib/queries/foodItems";
 
 const schema = z.object({
@@ -34,21 +36,22 @@ export function NewFoodItemForm({
   initialValues,
   initialImageUrl,
   barcode,
+  dateISO,
   disclaimer,
 }: {
   userId: string;
   initialValues?: NewFoodItemFormValues;
   initialImageUrl?: string | null;
   barcode?: string | null;
+  dateISO?: string;
   disclaimer?: string;
 }) {
   const addFoodItem = useAddFoodItem(userId);
+  const router = useRouter();
   const [imageUrl, setImageUrl] = useState<string | null>(initialImageUrl ?? null);
-  const [saved, setSaved] = useState(false);
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors, isSubmitting },
   } = useForm<NewFoodItemFormValues>({
     resolver: zodResolver(schema),
@@ -66,10 +69,7 @@ export function NewFoodItemForm({
       serving_size: null,
       is_favorite: true,
     });
-    reset(EMPTY_NEW_FOOD_ITEM_VALUES);
-    setImageUrl(null);
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 1500);
+    router.push(dateISO ? dashboardHref(dateISO) : "/");
   }
 
   return (
@@ -145,7 +145,7 @@ export function NewFoodItemForm({
       </div>
 
       <Button type="submit" fullWidth disabled={isSubmitting}>
-        {saved ? "Toegevoegd!" : isSubmitting ? "Toevoegen…" : "Product toevoegen"}
+        {isSubmitting ? "Toevoegen…" : "Product toevoegen"}
       </Button>
     </form>
   );
