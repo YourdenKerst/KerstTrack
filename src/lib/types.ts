@@ -9,6 +9,8 @@ export type RecurrenceType = "daily" | "every_n_days" | "weekly";
 
 export type Unit = "g" | "ml";
 
+export type MealCategory = "ontbijt" | "snack_na_ontbijt" | "lunch" | "snack_na_lunch" | "avondeten" | "snack_na_avondeten";
+
 export type Database = {
   public: {
     Tables: {
@@ -152,6 +154,9 @@ export type Database = {
           ingredient_count: number | null;
           amount: number | null;
           unit: Unit;
+          serving_size: number | null;
+          serving_unit: Unit | null;
+          meal_category: MealCategory;
           calories_kcal: number;
           protein_g: number;
           carbs_g: number;
@@ -170,6 +175,9 @@ export type Database = {
           ingredient_count?: number | null;
           amount?: number | null;
           unit?: Unit;
+          serving_size?: number | null;
+          serving_unit?: Unit | null;
+          meal_category?: MealCategory;
           calories_kcal: number;
           protein_g?: number;
           carbs_g?: number;
@@ -188,6 +196,9 @@ export type Database = {
           ingredient_count?: number | null;
           amount?: number | null;
           unit?: Unit;
+          serving_size?: number | null;
+          serving_unit?: Unit | null;
+          meal_category?: MealCategory;
           calories_kcal?: number;
           protein_g?: number;
           carbs_g?: number;

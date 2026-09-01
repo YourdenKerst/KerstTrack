@@ -3,31 +3,19 @@
 import { Heart, Loader2, Search, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { ScannedProductReview } from "@/components/food/ScannedProductReview";
+import { ProductAmountPicker, type ProductAmountResult } from "@/components/food/ProductAmountPicker";
 import { Input } from "@/components/ui";
 import { dashboardHref, todayISO } from "@/lib/date";
-import { scaleProductToGrams, searchProductsByName, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
+import {
+  foodItemToProduct,
+  scaleProductToGrams,
+  searchProductsByName,
+  type OpenFoodFactsProduct,
+} from "@/lib/openFoodFacts";
 import { useAddFoodItem, useDeleteFoodItem, useFoodItems, useSetFoodItemFavorite } from "@/lib/queries/foodItems";
-import { useAddFoodLog, useLogFoodItem } from "@/lib/queries/foodLogs";
+import { useAddFoodLog } from "@/lib/queries/foodLogs";
 import type { FoodItem } from "@/lib/types";
 import { useUserId } from "@/lib/user-context";
-
-function toOffShape(item: FoodItem): OpenFoodFactsProduct {
-  const factor = 100 / item.reference_grams;
-  return {
-    barcode: item.barcode ?? "",
-    name: item.name,
-    brand: item.brand,
-    imageUrl: item.image_url,
-    caloriesKcal: item.calories_kcal * factor,
-    proteinG: item.protein_g * factor,
-    carbsG: item.carbs_g * factor,
-    fatG: item.fat_g * factor,
-    fiberG: item.fiber_g * factor,
-    unit: item.unit,
-    servingSize: item.serving_size,
-  };
-}
 
 export default function SearchFoodPage() {
   return (
@@ -43,7 +31,6 @@ function SearchFoodPageContent() {
   const searchParams = useSearchParams();
   const dateISO = searchParams.get("date") ?? todayISO();
   const { data: items } = useFoodItems(userId);
-  const logItem = useLogFoodItem(userId);
   const addFoodLog = useAddFoodLog(userId);
   const addFoodItem = useAddFoodItem(userId);
   const setFavorite = useSetFoodItemFavorite(userId);
@@ -121,42 +108,40 @@ function SearchFoodPageContent() {
     setReviewing({ ...reviewing, existingItemId: id });
   }
 
-  async function handleConfirm(amount: number) {
+  async function handleConfirm({ amount, unit, mealCategory, servingSize, servingUnit }: ProductAmountResult) {
     if (!reviewing) return;
     const { product, existingItemId } = reviewing;
     setLogError(false);
 
     try {
-      const item = existingItemId ? (items ?? []).find((i) => i.id === existingItemId) : null;
-      if (item) {
-        await logItem.mutateAsync({ item, logDate: dateISO, grams: amount });
-      } else {
-        const scaled = scaleProductToGrams(
-          {
-            caloriesKcal: product.caloriesKcal ?? 0,
-            proteinG: product.proteinG ?? 0,
-            carbsG: product.carbsG ?? 0,
-            fatG: product.fatG ?? 0,
-            fiberG: product.fiberG ?? 0,
-          },
-          amount,
-        );
-        await addFoodLog.mutateAsync({
-          food_item_id: null,
-          recipe_id: null,
-          name: product.brand ? `${product.name} (${product.brand})` : (product.name ?? "Product"),
-          image_url: product.imageUrl,
-          ingredient_count: null,
-          amount,
-          unit: product.unit,
-          calories_kcal: scaled.caloriesKcal,
-          protein_g: scaled.proteinG,
-          carbs_g: scaled.carbsG,
-          fat_g: scaled.fatG,
-          fiber_g: scaled.fiberG,
-          log_date: dateISO,
-        });
-      }
+      const scaled = scaleProductToGrams(
+        {
+          caloriesKcal: product.caloriesKcal ?? 0,
+          proteinG: product.proteinG ?? 0,
+          carbsG: product.carbsG ?? 0,
+          fatG: product.fatG ?? 0,
+          fiberG: product.fiberG ?? 0,
+        },
+        amount,
+      );
+      await addFoodLog.mutateAsync({
+        food_item_id: existingItemId,
+        recipe_id: null,
+        name: product.brand ? `${product.name} (${product.brand})` : (product.name ?? "Product"),
+        image_url: product.imageUrl,
+        ingredient_count: null,
+        amount,
+        unit,
+        serving_size: servingSize,
+        serving_unit: servingUnit,
+        meal_category: mealCategory,
+        calories_kcal: scaled.caloriesKcal,
+        protein_g: scaled.proteinG,
+        carbs_g: scaled.carbsG,
+        fat_g: scaled.fatG,
+        fiber_g: scaled.fiberG,
+        log_date: dateISO,
+      });
 
       router.push(dashboardHref(dateISO));
     } catch {
@@ -169,21 +154,18 @@ function SearchFoodPageContent() {
       ? Boolean((items ?? []).find((i) => i.id === reviewing.existingItemId)?.is_favorite)
       : false;
     return (
-      <div className="space-y-2">
-        <ScannedProductReview
-          product={reviewing.product}
-          isFavorited={isFavorited}
-          onToggleFavorite={handleToggleFavoriteInReview}
-          onCancel={() => setReviewing(null)}
-          onConfirm={handleConfirm}
-        />
-        {logError && (
-          <p className="text-center text-sm text-danger">
-            Opslaan is niet gelukt. Probeer het opnieuw — als dit blijft gebeuren, is de database mogelijk nog niet
-            bijgewerkt.
-          </p>
-        )}
-      </div>
+      <ProductAmountPicker
+        product={reviewing.product}
+        isFavorited={isFavorited}
+        onToggleFavorite={handleToggleFavoriteInReview}
+        onCancel={() => setReviewing(null)}
+        onConfirm={handleConfirm}
+        error={
+          logError
+            ? "Opslaan is niet gelukt. Probeer het opnieuw — als dit blijft gebeuren, is de database mogelijk nog niet bijgewerkt."
+            : null
+        }
+      />
     );
   }
 
@@ -207,7 +189,7 @@ function SearchFoodPageContent() {
               <li key={item.id} className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setReviewing({ product: toOffShape(item), existingItemId: item.id })}
+                  onClick={() => setReviewing({ product: foodItemToProduct(item), existingItemId: item.id })}
                   className="flex min-w-0 flex-1 items-center gap-3 py-2.5 text-left transition-colors active:bg-surface-muted"
                 >
                   {item.image_url ? (

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Button, Card, ImageUploadField, Input, Label } from "@/components/ui";
 import { RecipeIngredientPicker, type PickedIngredient } from "@/components/log/RecipeIngredientPicker";
+import { defaultMealCategoryForTime } from "@/lib/calculations/mealBuckets";
 import { scaleRecipeToGrams, sumRecipeIngredients, totalRecipeGrams } from "@/lib/calculations/recipes";
 import { dashboardHref, todayISO } from "@/lib/date";
 import { useAddFoodLog } from "@/lib/queries/foodLogs";
@@ -111,6 +112,9 @@ function RecipeRow({
       ingredient_count: ingredients.length,
       amount,
       unit: "g",
+      serving_size: null,
+      serving_unit: null,
+      meal_category: defaultMealCategoryForTime(),
       log_date: dateISO,
       food_item_id: null,
     });

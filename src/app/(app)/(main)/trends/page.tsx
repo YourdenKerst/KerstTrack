@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { StreakCalendar } from "@/components/trends/StreakCalendar";
 import { WaterAdherenceChart } from "@/components/trends/WaterAdherenceChart";
 import { WeightChart } from "@/components/weight/WeightChart";
 import { PeriodSelector } from "@/components/charts/PeriodSelector";
 import { Card } from "@/components/ui";
 import { periodStartISO, todayISO, type Period } from "@/lib/date";
+import { getServerWaterTrackingEnabled, getWaterTrackingEnabled, subscribeToWaterTrackingChanges } from "@/lib/preferences";
 import { useDailyTargets } from "@/lib/queries/dailyTargets";
 import { useSupplements } from "@/lib/queries/supplements";
 import { useSupplementLogsForRange } from "@/lib/queries/supplementLogs";
@@ -93,6 +94,11 @@ function SupplementStreakCard({ userId }: { userId: string }) {
 
 export default function TrendsPage() {
   const userId = useUserId();
+  const waterTrackingEnabled = useSyncExternalStore(
+    subscribeToWaterTrackingChanges,
+    getWaterTrackingEnabled,
+    getServerWaterTrackingEnabled,
+  );
 
   return (
     <div className="space-y-4 px-4 pt-6">
@@ -101,7 +107,7 @@ export default function TrendsPage() {
       </header>
 
       <WeightTrendCard userId={userId} />
-      <WaterTrendCard userId={userId} />
+      {waterTrackingEnabled && <WaterTrendCard userId={userId} />}
       <SupplementStreakCard userId={userId} />
     </div>
   );

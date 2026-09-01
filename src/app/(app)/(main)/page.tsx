@@ -3,7 +3,7 @@
 import { UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useSyncExternalStore } from "react";
 import { Card } from "@/components/ui";
 import { DaySwitcher } from "@/components/dashboard/DaySwitcher";
 import { MacroRings } from "@/components/dashboard/MacroRings";
@@ -14,6 +14,7 @@ import { TodayFoodList } from "@/components/food/TodayFoodList";
 import { sumMacros } from "@/lib/calculations/nutrition";
 import type { GoalPlan } from "@/lib/calculations/recommendedTargets";
 import { addDaysISO, formatFullDate, MAX_FUTURE_PLANNING_DAYS, todayISO } from "@/lib/date";
+import { getServerWaterTrackingEnabled, getWaterTrackingEnabled, subscribeToWaterTrackingChanges } from "@/lib/preferences";
 import { useDailyTargets } from "@/lib/queries/dailyTargets";
 import { useFoodLogsForDate } from "@/lib/queries/foodLogs";
 import { useProfile } from "@/lib/queries/profiles";
@@ -49,6 +50,11 @@ function DashboardPageContent() {
     router.push(params.size > 0 ? `/?${params.toString()}` : "/", { scroll: false });
   }
 
+  const waterTrackingEnabled = useSyncExternalStore(
+    subscribeToWaterTrackingChanges,
+    getWaterTrackingEnabled,
+    getServerWaterTrackingEnabled,
+  );
   const { data: profile } = useProfile(userId);
   const { data: targets } = useDailyTargets(userId);
   const { data: foodLogs } = useFoodLogsForDate(userId, selectedDate);
@@ -85,7 +91,9 @@ function DashboardPageContent() {
         </Link>
       </MacroRings>
 
-      <WaterBlock userId={userId} dateISO={selectedDate} waterMl={waterMl} waterTarget={targets.water_ml} />
+      {waterTrackingEnabled && (
+        <WaterBlock userId={userId} dateISO={selectedDate} waterMl={waterMl} waterTarget={targets.water_ml} />
+      )}
 
       <TodayFoodList userId={userId} dateISO={selectedDate} />
 

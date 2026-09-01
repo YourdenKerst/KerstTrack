@@ -4,11 +4,16 @@ import { Barcode, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { BarcodeScanner } from "@/components/food/BarcodeScanner";
-import { ScannedProductReview } from "@/components/food/ScannedProductReview";
+import { ProductAmountPicker, type ProductAmountResult } from "@/components/food/ProductAmountPicker";
 import { dashboardHref, todayISO } from "@/lib/date";
-import { lookupBarcodeProduct, scaleProductToGrams, type OpenFoodFactsProduct } from "@/lib/openFoodFacts";
+import {
+  foodItemToProduct,
+  lookupBarcodeProduct,
+  scaleProductToGrams,
+  type OpenFoodFactsProduct,
+} from "@/lib/openFoodFacts";
 import { useAddFoodItem, useFoodItems, useSetFoodItemFavorite, findFoodItemByBarcode } from "@/lib/queries/foodItems";
-import { useAddFoodLog, useLogFoodItem } from "@/lib/queries/foodLogs";
+import { useAddFoodLog } from "@/lib/queries/foodLogs";
 import { useUserId } from "@/lib/user-context";
 
 type ScanStatus = "idle" | "looking-up" | "not-found" | "error" | "log-error";
@@ -27,7 +32,6 @@ function ScanFoodPageContent() {
   const searchParams = useSearchParams();
   const dateISO = searchParams.get("date") ?? todayISO();
   const { data: items } = useFoodItems(userId);
-  const logFoodItem = useLogFoodItem(userId);
   const addFoodLog = useAddFoodLog(userId);
   const addFoodItem = useAddFoodItem(userId);
   const setFavorite = useSetFoodItemFavorite(userId);
@@ -48,8 +52,9 @@ function ScanFoodPageContent() {
     try {
       const localMatch = await findFoodItemByBarcode(userId, barcode);
       if (localMatch) {
-        await logFoodItem.mutateAsync({ item: localMatch, logDate: dateISO });
-        router.push(dashboardHref(dateISO));
+        setSavedItemId(localMatch.id);
+        setScannedProduct(foodItemToProduct(localMatch));
+        setStatus("idle");
         return;
       }
 
@@ -91,39 +96,37 @@ function ScanFoodPageContent() {
     setSavedItemId(created.id);
   }
 
-  async function handleConfirm(amount: number) {
+  async function handleConfirm({ amount, unit, mealCategory, servingSize, servingUnit }: ProductAmountResult) {
     if (!scannedProduct) return;
     try {
-      const item = savedItemId ? (items ?? []).find((i) => i.id === savedItemId) : null;
-      if (item) {
-        await logFoodItem.mutateAsync({ item, logDate: dateISO, grams: amount });
-      } else {
-        const scaled = scaleProductToGrams(
-          {
-            caloriesKcal: scannedProduct.caloriesKcal ?? 0,
-            proteinG: scannedProduct.proteinG ?? 0,
-            carbsG: scannedProduct.carbsG ?? 0,
-            fatG: scannedProduct.fatG ?? 0,
-            fiberG: scannedProduct.fiberG ?? 0,
-          },
-          amount,
-        );
-        await addFoodLog.mutateAsync({
-          food_item_id: null,
-          recipe_id: null,
-          name: scannedProduct.brand ? `${scannedProduct.name} (${scannedProduct.brand})` : (scannedProduct.name ?? "Gescand product"),
-          image_url: scannedProduct.imageUrl,
-          ingredient_count: null,
-          amount,
-          unit: scannedProduct.unit,
-          calories_kcal: scaled.caloriesKcal,
-          protein_g: scaled.proteinG,
-          carbs_g: scaled.carbsG,
-          fat_g: scaled.fatG,
-          fiber_g: scaled.fiberG,
-          log_date: dateISO,
-        });
-      }
+      const scaled = scaleProductToGrams(
+        {
+          caloriesKcal: scannedProduct.caloriesKcal ?? 0,
+          proteinG: scannedProduct.proteinG ?? 0,
+          carbsG: scannedProduct.carbsG ?? 0,
+          fatG: scannedProduct.fatG ?? 0,
+          fiberG: scannedProduct.fiberG ?? 0,
+        },
+        amount,
+      );
+      await addFoodLog.mutateAsync({
+        food_item_id: savedItemId,
+        recipe_id: null,
+        name: scannedProduct.brand ? `${scannedProduct.name} (${scannedProduct.brand})` : (scannedProduct.name ?? "Gescand product"),
+        image_url: scannedProduct.imageUrl,
+        ingredient_count: null,
+        amount,
+        unit,
+        serving_size: servingSize,
+        serving_unit: servingUnit,
+        meal_category: mealCategory,
+        calories_kcal: scaled.caloriesKcal,
+        protein_g: scaled.proteinG,
+        carbs_g: scaled.carbsG,
+        fat_g: scaled.fatG,
+        fiber_g: scaled.fiberG,
+        log_date: dateISO,
+      });
       router.push(dashboardHref(dateISO));
     } catch {
       setStatus("log-error");
@@ -182,22 +185,20 @@ function ScanFoodPageContent() {
         </div>
       )}
 
-      {status === "log-error" && (
-        <p className="py-2 text-center text-sm text-danger">
-          Opslaan is niet gelukt. Probeer het opnieuw — als dit blijft gebeuren, is de database mogelijk nog niet
-          bijgewerkt.
-        </p>
-      )}
-
       {scannerOpen && <BarcodeScanner onDetected={handleDetected} onClose={() => router.push("/")} />}
 
       {scannedProduct && (
-        <ScannedProductReview
+        <ProductAmountPicker
           product={scannedProduct}
           isFavorited={isFavorited}
           onToggleFavorite={handleToggleFavorite}
           onCancel={reset}
           onConfirm={handleConfirm}
+          error={
+            status === "log-error"
+              ? "Opslaan is niet gelukt. Probeer het opnieuw — als dit blijft gebeuren, is de database mogelijk nog niet bijgewerkt."
+              : null
+          }
         />
       )}
     </div>

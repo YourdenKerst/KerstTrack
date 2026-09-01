@@ -5,6 +5,8 @@
 // Naam-zoeken gebruikt search-a-licious (search.openfoodfacts.org) — de v2/v3 API
 // heeft geen full-text zoeken, en de oude /cgi/search.pl-endpoint is niet meer in de lucht.
 
+import type { FoodItem } from "@/lib/types";
+
 export interface OpenFoodFactsProduct {
   barcode: string;
   name: string | null;
@@ -97,23 +99,59 @@ export async function lookupBarcodeProduct(barcode: string): Promise<OpenFoodFac
 }
 
 /**
- * search-a-licious matcht met een "should" (OR) query over meerdere velden
- * (naam, merk, categorie, ...) — een product dat alléén het merk matcht (niet
- * de naam) kan zo alsnog hoog scoren, ook als het een compleet ander product
- * is. Hertelt hier hoeveel losse zoektermen daadwerkelijk in naam+merk
- * voorkomen (naam weegt zwaarder), filtert nul-scores eruit en sorteert op
- * score — een simpele maar effectieve correctie zonder OFF's eigen ranking
- * te hoeven vervangen.
+ * Hoe vaak (en waar) de zoektermen daadwerkelijk in naam/merk voorkomen —
+ * puur voor het sorteren van kandidaten die de strikte alle-termen-check in
+ * `searchProductsByName` al gehaald hebben (naam weegt zwaarder dan merk).
  */
-function relevanceScore(product: OpenFoodFactsProduct, queryTerms: string[]): number {
+function relevanceScore(product: OpenFoodFactsProduct, queryWords: string[]): number {
   const nameLower = (product.name ?? "").toLowerCase();
   const brandLower = (product.brand ?? "").toLowerCase();
   let score = 0;
-  for (const term of queryTerms) {
-    if (nameLower.includes(term)) score += 2;
-    else if (brandLower.includes(term)) score += 1;
+  for (const word of queryWords) {
+    if (nameLower.includes(word)) score += 2;
+    else if (brandLower.includes(word)) score += 1;
   }
   return score;
+}
+
+/** Houdt alleen Unicode-letters/cijfers over — voorkomt dat een woord met rare tekens de Lucene-query van OFF breekt. */
+function sanitizeForFieldQuery(word: string): string {
+  return word.replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+/**
+ * search-a-licious (Elasticsearch/Lucene) behandelt een kale meerwoordige
+ * query als ÉÉN gescoorde tekstblob (match_phrase + multi_match, "should") —
+ * niet als "elk woord moet ergens voorkomen". Bevestigd via curl tegen de
+ * live API: `q=speculoos albert heijn` zet een product dat toevallig
+ * "Albert Heijn" heet bovenaan, vóór echte speculoos-producten van dat merk
+ * — en dat blijft zo bij een grotere page_size (het juiste product staat
+ * domweg niet bij de eerste 50). Een `veld:waarde`-term (bv. `brands:heijn`)
+ * wordt daarentegen een verplichte filter; zulke termen ANDen wél met elkaar
+ * (bevestigd: een extra fout `brands:`-veld levert 0 resultaten op i.p.v.
+ * ze te negeren). Door het/de laatste 1-2 woorden (vaak het merk, gezien
+ * hoe mensen typen: "product merk") als `brands:`-filter te proberen, komt
+ * het juiste product wél naar boven — bevestigd: `speculoos brands:albert
+ * brands:heijn` geeft precies 1 hit, exact het gezochte product.
+ *
+ * Om niet te moeten raden óf de laatste woorden echt het merk zijn, worden
+ * meerdere queryvarianten parallel opgevraagd (kale variant als vangnet +
+ * laatste-1-woord- en laatste-2-woorden-als-merk-filter) en samengevoegd.
+ * Als laatste, strikte correctheidscheck (en om varianten die té soepel
+ * bleken te verifiëren) moet ELK zoekwoord alsnog ergens in naam+merk
+ * voorkomen — anders valt het kandidaat alsnog af, precies zoals gevraagd.
+ */
+function buildQueryVariants(words: string[]): string[] {
+  const variants = new Set<string>([words.join(" ")]);
+  for (const k of [1, 2]) {
+    if (words.length <= k) continue;
+    const brandWords = words.slice(words.length - k).map(sanitizeForFieldQuery);
+    if (brandWords.some((w) => !w)) continue;
+    const rest = words.slice(0, words.length - k).join(" ");
+    const brandClauses = brandWords.map((w) => `brands:${w}`).join(" ");
+    variants.add(rest ? `${rest} ${brandClauses}` : brandClauses);
+  }
+  return [...variants];
 }
 
 /**
@@ -126,39 +164,75 @@ function relevanceScore(product: OpenFoodFactsProduct, queryTerms: string[]): nu
 export async function searchProductsByName(query: string, limit = 15): Promise<OpenFoodFactsProduct[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
-  const queryTerms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
 
   try {
-    // Vraag meer kandidaten op dan we tonen — geeft de relevantie-herordening
-    // hieronder iets om uit te kiezen i.p.v. alleen OFF's eigen top-N.
-    const response = await fetch(`/api/off-search?q=${encodeURIComponent(trimmed)}&limit=${limit * 3}`);
-    if (!response.ok) return [];
+    const variants = buildQueryVariants(words);
+    const responses = await Promise.all(
+      variants.map(async (q) => {
+        try {
+          const response = await fetch(`/api/off-search?q=${encodeURIComponent(q)}&limit=${limit * 3}`);
+          if (!response.ok) return [];
+          const data = await response.json();
+          return (data.hits ?? []) as Record<string, unknown>[];
+        } catch {
+          return [];
+        }
+      }),
+    );
 
-    const data = await response.json();
-    const hits = (data.hits ?? []) as Record<string, unknown>[];
     // Eén onverwacht veld-formaat in één hit mag niet de hele zoekopdracht
     // laten mislukken — zie de firstBrand-fix hierboven (search-a-licious
     // gaf `brands` als array, .split() daarop gooide en de buitenste
     // try/catch ving dat op als "niets gevonden").
+    const seenCodes = new Set<string>();
     const products: OpenFoodFactsProduct[] = [];
-    for (const hit of hits) {
-      if (typeof hit.code !== "string") continue;
-      try {
-        products.push(toProduct(hit.code, hit));
-      } catch {
-        // sla alleen deze ene hit over
+    for (const hits of responses) {
+      for (const hit of hits) {
+        if (typeof hit.code !== "string" || seenCodes.has(hit.code)) continue;
+        seenCodes.add(hit.code);
+        try {
+          products.push(toProduct(hit.code, hit));
+        } catch {
+          // sla alleen deze ene hit over
+        }
       }
     }
 
     return products
-      .map((product) => ({ product, score: relevanceScore(product, queryTerms) }))
-      .filter(({ score }) => score > 0)
+      .filter((product) => {
+        const haystack = `${product.name ?? ""} ${product.brand ?? ""}`.toLowerCase();
+        // Ook zonder spaties vergelijken — "albertheijn" moet nog steeds
+        // matchen tegen een merk dat geïndexeerd staat als "Albert Heijn".
+        const haystackNoSpaces = haystack.replace(/\s+/g, "");
+        return words.every((word) => haystack.includes(word) || haystackNoSpaces.includes(word));
+      })
+      .map((product) => ({ product, score: relevanceScore(product, words) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ product }) => product);
   } catch {
     return [];
   }
+}
+
+/** Zet een opgeslagen product (favoriet/eigen item) om naar dezelfde "per 100"-vorm als een OFF-zoekresultaat. */
+export function foodItemToProduct(item: FoodItem): OpenFoodFactsProduct {
+  const factor = 100 / item.reference_grams;
+  return {
+    barcode: item.barcode ?? "",
+    name: item.name,
+    brand: item.brand,
+    imageUrl: item.image_url,
+    caloriesKcal: item.calories_kcal * factor,
+    proteinG: item.protein_g * factor,
+    carbsG: item.carbs_g * factor,
+    fatG: item.fat_g * factor,
+    fiberG: item.fiber_g * factor,
+    unit: item.unit,
+    servingSize: item.serving_size,
+  };
 }
 
 /** Schaalt "per 100g"-waarden naar een opgegeven gewicht in gram. */

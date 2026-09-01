@@ -115,6 +115,16 @@ create table if not exists public.food_logs (
   -- kunnen passen (herschaalt calories_kcal/protein_g/... proportioneel).
   amount numeric(7,1),
   unit text not null default 'g' check (unit in ('g', 'ml')),
+  -- Alleen gezet als de maat "Portie" was — de portiegrootte uit Open Food
+  -- Facts zelf staat nergens anders opgeslagen, dus zonder dit veld zou een
+  -- latere bewerking van de log die maat niet meer kunnen aanbieden.
+  serving_size numeric(7,1),
+  serving_unit text check (serving_unit in ('g', 'ml')),
+  -- Door de gebruiker gekozen bij het loggen (voorinvulling o.b.v. tijdstip,
+  -- zie mealBuckets.ts) — vervangt de eerdere puur-tijd-afgeleide indeling.
+  meal_category text not null default 'snack_na_avondeten' check (
+    meal_category in ('ontbijt', 'snack_na_ontbijt', 'lunch', 'snack_na_lunch', 'avondeten', 'snack_na_avondeten')
+  ),
   calories_kcal numeric(6,1) not null,
   protein_g numeric(6,1) not null default 0,
   carbs_g numeric(6,1) not null default 0,
@@ -606,3 +616,35 @@ begin
 end $$;
 
 alter table public.supplements add column if not exists dose text;
+
+-- =========================================================
+-- Migratie: expliciete maaltijdcategorie per log (i.p.v. afgeleid uit
+-- logged_at) — gekozen bij het loggen, met een tijd-gebaseerde voorinvulling.
+-- =========================================================
+alter table public.food_logs add column if not exists meal_category text not null default 'snack_na_avondeten';
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'food_logs_meal_category_check'
+  ) then
+    alter table public.food_logs add constraint food_logs_meal_category_check check (
+      meal_category in ('ontbijt', 'snack_na_ontbijt', 'lunch', 'snack_na_lunch', 'avondeten', 'snack_na_avondeten')
+    );
+  end if;
+end $$;
+
+-- =========================================================
+-- Migratie: portiegrootte bewaren per log — zodat het aanpassen van een
+-- bestaande log de maat "Portie" weer kan aanbieden i.p.v. alleen handmatig
+-- gram/ml (bestaande rijen krijgen null, wat de UI netjes afvangt).
+-- =========================================================
+alter table public.food_logs add column if not exists serving_size numeric(7,1);
+alter table public.food_logs add column if not exists serving_unit text;
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'food_logs_serving_unit_check'
+  ) then
+    alter table public.food_logs add constraint food_logs_serving_unit_check check (serving_unit in ('g', 'ml'));
+  end if;
+end $$;

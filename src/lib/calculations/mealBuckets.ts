@@ -1,19 +1,36 @@
-export type MealBucket = "ontbijt" | "lunch" | "diner" | "tussendoortje";
+import type { MealCategory } from "@/lib/types";
 
-export const MEAL_BUCKET_ORDER: MealBucket[] = ["ontbijt", "lunch", "diner", "tussendoortje"];
+export type { MealCategory };
 
-export const MEAL_BUCKET_LABELS: Record<MealBucket, string> = {
+export const MEAL_CATEGORY_ORDER: MealCategory[] = [
+  "ontbijt",
+  "snack_na_ontbijt",
+  "lunch",
+  "snack_na_lunch",
+  "avondeten",
+  "snack_na_avondeten",
+];
+
+export const MEAL_CATEGORY_LABELS: Record<MealCategory, string> = {
   ontbijt: "Ontbijt",
+  snack_na_ontbijt: "Snack na ontbijt",
   lunch: "Lunch",
-  diner: "Diner",
-  tussendoortje: "Tussendoortjes",
+  snack_na_lunch: "Snack na lunch",
+  avondeten: "Avondeten",
+  snack_na_avondeten: "Snack na avondeten",
 };
 
-/** Indeling puur op tijdstip van loggen — geen apart veld nodig bij het loggen zelf. */
-export function mealBucketForTime(loggedAt: string): MealBucket {
-  const hour = new Date(loggedAt).getHours();
-  if (hour >= 5 && hour < 11) return "ontbijt";
-  if (hour >= 11 && hour < 15) return "lunch";
-  if (hour >= 17 && hour < 22) return "diner";
-  return "tussendoortje";
+/**
+ * Redelijke standaardkeuze op basis van het huidige tijdstip — je kunt 'm
+ * altijd zelf overschrijven via de dropdown bij het loggen. Puur een
+ * voorinvulling, geen afgeleide/vaste indeling zoals voorheen.
+ */
+export function defaultMealCategoryForTime(date: Date = new Date()): MealCategory {
+  const t = date.getHours() + date.getMinutes() / 60;
+  if (t >= 5 && t < 10.5) return "ontbijt";
+  if (t >= 10.5 && t < 11.5) return "snack_na_ontbijt";
+  if (t >= 11.5 && t < 14.5) return "lunch";
+  if (t >= 14.5 && t < 17) return "snack_na_lunch";
+  if (t >= 17 && t < 20.5) return "avondeten";
+  return "snack_na_avondeten";
 }

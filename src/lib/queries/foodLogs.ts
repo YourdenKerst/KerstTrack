@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import type { FoodItem, FoodLog } from "@/lib/types";
+import type { FoodLog, MealCategory, Unit } from "@/lib/types";
 
 export function foodLogsDateKey(userId: string, dateISO: string) {
   return ["food_logs", userId, dateISO] as const;
@@ -64,44 +64,32 @@ export function useAddFoodLog(userId: string) {
 }
 
 /**
- * Logt een opgeslagen product, herschaald naar een opgegeven hoeveelheid in
- * gram/ml (t.o.v. het item's `reference_grams`). Zonder `grams` wordt het item
- * exact zo gelogd als opgeslagen.
+ * Herschaalt een bestaande log naar een nieuwe hoeveelheid/eenheid/maaltijd-
+ * categorie (achteraf aanpassen vanuit "Vandaag gegeten", via dezelfde
+ * maten-kiezer als bij het loggen zelf). De macro's staan altijd gedenormali-
+ * seerd t.o.v. `log.amount` (zie tabel-notitie in schema.sql) — de her-
+ * schaalfactor is dus altijd `newAmount / log.amount`, ongeacht of de eenheid
+ * meeverandert (bv. van gram naar een ml-maat): dat is puur een weergave-
+ * label, geen ander referentiepunt voor de voedingswaarden.
  */
-export function useLogFoodItem(userId: string) {
+export function useUpdateFoodLog(userId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ item, logDate, grams }: { item: FoodItem; logDate: string; grams?: number }) => {
-      const supabase = createClient();
-      const amount = grams ?? item.reference_grams;
-      const factor = amount / item.reference_grams;
-      const { error } = await supabase.from("food_logs").insert({
-        user_id: userId,
-        food_item_id: item.id,
-        name: item.name,
-        image_url: item.image_url,
-        amount,
-        unit: item.unit,
-        calories_kcal: Math.round(item.calories_kcal * factor * 100) / 100,
-        protein_g: Math.round(item.protein_g * factor * 100) / 100,
-        carbs_g: Math.round(item.carbs_g * factor * 100) / 100,
-        fat_g: Math.round(item.fat_g * factor * 100) / 100,
-        fiber_g: Math.round(item.fiber_g * factor * 100) / 100,
-        log_date: logDate,
-      });
-      if (error) throw error;
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: foodLogsDateKey(userId, variables.logDate) });
-    },
-  });
-}
-
-/** Herschaalt een bestaande log naar een nieuwe hoeveelheid (achteraf aanpassen vanuit "Vandaag gegeten"). */
-export function useUpdateFoodLogAmount(userId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ log, newAmount }: { log: FoodLog; newAmount: number }) => {
+    mutationFn: async ({
+      log,
+      newAmount,
+      newUnit,
+      newMealCategory,
+      newServingSize,
+      newServingUnit,
+    }: {
+      log: FoodLog;
+      newAmount: number;
+      newUnit: Unit;
+      newMealCategory: MealCategory;
+      newServingSize: number | null;
+      newServingUnit: Unit | null;
+    }) => {
       if (!log.amount || log.amount <= 0) throw new Error("Geen basis-hoeveelheid bekend voor deze log.");
       const factor = newAmount / log.amount;
       const supabase = createClient();
@@ -109,6 +97,10 @@ export function useUpdateFoodLogAmount(userId: string) {
         .from("food_logs")
         .update({
           amount: newAmount,
+          unit: newUnit,
+          serving_size: newServingSize,
+          serving_unit: newServingUnit,
+          meal_category: newMealCategory,
           calories_kcal: Math.round(log.calories_kcal * factor * 100) / 100,
           protein_g: Math.round(log.protein_g * factor * 100) / 100,
           carbs_g: Math.round(log.carbs_g * factor * 100) / 100,
